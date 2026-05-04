@@ -55,5 +55,9 @@
   "sms_send_otp": "/sms_send_otp",
   "sms_verify_otp": "/sms_verify_otp",
   "google_login": "google_login",
-  "report_packages": "/report_packages"
+  "report_packages": "/report_packages",
+  "territory_design_vrp": "/territory_design_vrp",
+  "layers_upload_file_all": "/fetch_user_layer",
+  "layers_upload_file_new": "/layer_file_upload",
+  "layers_upload_file_single": "/fetch_uploaded_layer_data"
 }

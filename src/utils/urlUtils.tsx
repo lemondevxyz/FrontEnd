@@ -40,15 +40,15 @@ export const useGetQueryParamObj = () => {
  * const filteredQueryString = createQueryString(paramsWithEmptyValues);
  * console.log(filteredQueryString); // '?id=1'
  */
-export function createQueryString(queryObject: any = {}) {
-  let queryString = Object.keys(queryObject)
+export function createQueryString(queryObject: unknown = {}) {
+  const queryString = Object.keys(queryObject)
     .filter(
       key => queryObject[key] && !(Array.isArray(queryObject[key]) && !queryObject[key].length)
     )
     .map(key => {
       return Array.isArray(queryObject[key])
         ? queryObject[key]
-            .map((item: any) => `${encodeURIComponent(key)}=${encodeURIComponent(item)}`)
+            .map((item: unknown) => `${encodeURIComponent(key)}=${encodeURIComponent(item)}`)
             .join('&')
         : `${encodeURIComponent(key)}=${encodeURIComponent(queryObject[key])}`;
     })

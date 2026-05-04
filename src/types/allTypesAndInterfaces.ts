@@ -35,7 +35,7 @@ export interface Catalog {
   catalog_description?: string;
   layers?: { layer_id: string; points_color: string }[];
   display_elements: {
-    details: any[];
+    details: unknown[];
     markers: {
       id: string;
       description: string;
@@ -102,7 +102,7 @@ export interface CardItem {
   points_color?: string;
   legend?: string;
   display_elements?: {
-    details: any[];
+    details: unknown[];
     markers: {
       id: string;
       description: string;
@@ -135,6 +135,7 @@ export interface CatalogContextType {
   name: string;
   caseStudyContent?: Descendant[];
   selectedContainerType: 'Catalogue' | 'Layer' | 'Home';
+  selectedContainerLayerModalOpen: boolean;
   selectedHomeTab: 'LAYER' | 'CATALOG';
   setSelectedHomeTab: React.Dispatch<React.SetStateAction<'LAYER' | 'CATALOG'>>;
   setFormStage: React.Dispatch<React.SetStateAction<'catalog' | 'catalogDetails' | 'save'>>;
@@ -146,6 +147,7 @@ export interface CatalogContextType {
   setDescription: React.Dispatch<React.SetStateAction<string>>;
   setName: React.Dispatch<React.SetStateAction<string>>;
   setCaseStudyContent: React.Dispatch<React.SetStateAction<Descendant[]>>;
+  selectedContainerLayerModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectedContainerType: React.Dispatch<React.SetStateAction<'Catalogue' | 'Layer' | 'Home'>>;
   handleAddClick: (
     id: string,
@@ -166,8 +168,8 @@ export interface CatalogContextType {
   setSaveResponse: React.Dispatch<React.SetStateAction<SaveResponse | null>>;
   colors: string[][];
   setColors: React.Dispatch<React.SetStateAction<string[][]>>;
-  chosenPallet: any;
-  setChosenPallet: React.Dispatch<React.SetStateAction<any>>;
+  chosenPallet: unknown;
+  setChosenPallet: React.Dispatch<React.SetStateAction<unknown>>;
   radiusInput: number | null;
   setRadiusInput: React.Dispatch<React.SetStateAction<number | null>>;
   openDropdownIndices: (number | null)[];
@@ -182,14 +184,14 @@ export interface CatalogContextType {
   ) => Promise<GradientColorBasedOnZone[]>;
   selectedBasedon: string;
   setSelectedBasedon: React.Dispatch<React.SetStateAction<string>>;
-  layerColors: Record<string, any>;
-  setLayerColors: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  layerColors: Record<string, unknown>;
+  setLayerColors: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
   isRadiusMode: boolean;
   setIsRadiusMode: React.Dispatch<React.SetStateAction<boolean>>;
   isAdvanced: boolean;
   setIsAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
-  isAdvancedMode: Record<string, any>;
-  setIsAdvancedMode: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  isAdvancedMode: Record<string, unknown>;
+  setIsAdvancedMode: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
   updateLayerColor: (layerId: number, newColor: string) => void;
   updateLayerDisplay: (layerIndex: number, display: boolean) => void;
   updateLayerHeatmap: (layerIndex: number, isHeatmap: boolean) => void;
@@ -202,7 +204,7 @@ export interface CatalogContextType {
   basedOnProperty: string | null;
   setBasedOnProperty: React.Dispatch<React.SetStateAction<string | null>>;
   updateLayerLegend: (layerId: number, legend: string) => void;
-  handleStoreUnsavedGeoPoint: (geoPoints: any) => void;
+  handleStoreUnsavedGeoPoint: (geoPoints: unknown) => void;
   handleNameBasedColorZone: (
     requestData?: ReqGradientColorBasedOnZone
   ) => Promise<GradientColorBasedOnZone[]>;
@@ -228,7 +230,7 @@ export interface CatalogContextType {
     description: string,
     sourcePoint: [number, number],
     destinationPoint: [number, number],
-    route: any,
+    route: unknown,
     distance: number,
     duration: number,
     measurementId?: string
@@ -279,7 +281,7 @@ export interface CatalogContextType {
 
 export interface GradientColorBasedOnZone extends MapFeatures {
   sub_layer_id: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ReqGradientColorBasedOnZone {
@@ -512,7 +514,7 @@ export interface BoxmapProperties {
   user_ratings_total: number | string;
   priceLevel?: number;
   heatmap_weight?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Feature {
@@ -553,7 +555,7 @@ export interface MapFeatures extends FetchDatasetResponse {
   gradient_groups?: GradientGroup[];
   is_gradient?: boolean;
   gradient_based_on?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface TabularData {
@@ -694,9 +696,9 @@ export const DisplayType = {
 export interface PolygonFeature {
   id: string;
   type: string;
-  properties: any;
+  properties: unknown;
   geometry: {
-    coordinates: [number, number][][] | number[][][] | any;
+    coordinates: [number, number][][] | number[][][] | unknown;
     type: string;
   };
   isStatisticsPopupOpen: boolean;
@@ -772,7 +774,7 @@ export interface ApiRequestOptions extends AxiosRequestConfig {
   authMode?: 'public' | 'private';
   isAuthRequest?: boolean;
   isFormData?: boolean;
-  body?: any;
+  body?: unknown;
   options?: AxiosRequestConfig;
   useCache?: boolean;
 }
@@ -822,14 +824,14 @@ export interface UserProfile {
   phone?: string;
   account_type: string;
   show_price_on_purchase: boolean;
-  maker?: Record<string, any>;
+  maker?: Record<string, unknown>;
   has_used_free_location_report?: boolean;
 }
 
 export interface PopupInfo {
   type: string;
   name: string;
-  data: any;
+  data: unknown;
 }
 
 export interface PaymentMethod {

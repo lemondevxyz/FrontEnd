@@ -1,3 +1,5 @@
+
+
 import {
   FaHandshake,
   FaExclamationTriangle,
@@ -215,8 +217,7 @@ const SetAttributeStep = ({
   
         <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-4 flex flex-col overflow-hidden max-h-[60vh]">
           <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center flex-shrink-0">
-            <FaHandshake className="w-4 h-4 me-2 text-primary" />{t("excluded-categories")}</h3>
-
+            <FaHandshake className="w-4 h-4 me-2 text-primary" />{t("included-categories")}</h3>
           <input
             type="text"
             placeholder={t("search-categories-or-add-custom-keyword")}

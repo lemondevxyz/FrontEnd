@@ -20,6 +20,7 @@ function CatalogMenu() {
 
   const {
     setSelectedContainerType,
+    setSelectedContainerLayerModalOpen,
     resetState,
     setFormStage,
     setLegendList,
@@ -241,6 +242,15 @@ function CatalogMenu() {
               return <MultipleLayersSetting key={layer.uniqueId || index} layerIndex={index} />;
             })}
           </div>
+        </div>
+        <div className="mt-auto flex items-center justify-center">
+        	<button className="px-4 py-2 text-orange-700"
+	        	onClick={() => {
+	        		setSelectedContainerLayerModalOpen(true)
+		        	handleAddLayerClick()
+	        	}}>
+		        {t("add-your-own-data")}
+	        </button>
         </div>
       </div>
       <div className="w-full flex-col flex px-2 py-2 select-none border-t lg:mb-0 mb-14">

@@ -13,10 +13,47 @@ import CampaignPage from '../../pages/Campaign/campaign_home';
 import { Spinner } from '../common';
 import { t } from '../../i18n';
 
+import Modal from '../common/Modal';
+
+function LayerUploadFileInput({
+	label,
+	disabled,
+	name,
+	type,
+	value,
+	setFormData,
+	...rest
+}) {
+	return (<div className="space-y-3" key={name}>
+	  <label htmlFor="country_name" className="block text-sm font-semibold text-gray-700">
+	    <span className="flex items-center">
+	      {label}
+	    </span>
+	  </label>
+	  {type !== "textarea" ?
+	    (<input
+	      type={type}
+	      className={"px-2 py-1 border-2 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-300 focus:enabled:outline-none focus:enabled:ring-2 focus:enabled:ring-primary/20 focus:enabled:border-primary transition-all duration-200 text-sm " + (type !== "checkbox" ? "w-full" : "")}
+	      disabled={disabled && disabled()}
+	      onChange={e => {
+		      setFormData(name, type === "checkbox" ? !value : e.target.value)
+	      }}
+	      value={value}
+	      name={name}
+	      {...rest}
+	    />) :
+	    (<textarea
+		    onChange={e => setFormData(name, e.target.value)}
+		    value={value}
+	      className="w-full px-2 py-1 border-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200"></textarea>)}
+	</div>)
+}
 
 function DataContainer() {
   const {
     selectedContainerType,
+    selectedContainerLayerModalOpen,
+    setSelectedContainerLayerModalOpen,
     handleAddClick,
     setGeoPoints,
     isLoading,
@@ -38,6 +75,36 @@ function DataContainer() {
   const [, setWsResId] = useState<string>('');
   const [, setWsResLoading] = useState<boolean>(false);
   const [, setWsResError] = useState<Error | null>(null);
+  const [loadFiles, setLoadFiles] = [selectedContainerLayerModalOpen, setSelectedContainerLayerModalOpen];
+  const [loadFilesLayers, setLoadFilesLayers] = useState([]);
+  const [formData, setFormData] = useState({deduplicate: false});
+  
+  useEffect(() => {
+	  if(selectedContainerLayerModalOpen)
+		  setActiveTab('Load Files') 
+  }, [selectedContainerLayerModalOpen]);
+   
+  useEffect(() => {
+  	(async () => {
+	  	if(activeTab === "Load Files") {
+	  		setLoading(true);
+	  		try {
+		      const body = { user_id: authResponse?.localId };
+		      const res = await apiRequest({
+		        url: urls.layers_upload_file_all,
+		        method: 'post',
+		        isAuthRequest: true,
+		        body: body,
+		      });
+		      
+		  		setLoadFilesLayers(res.data.data);
+	      } catch(e) {
+	      	console.log(e)
+	      }
+	  		setLoading(false);
+	  	}
+  	})();
+  }, [activeTab, authResponse]);
 
   useEffect(() => {
     async function fetchUserLayers() {
@@ -86,7 +153,7 @@ function DataContainer() {
     async function fetchData() {
       setLoading(true);
       setError(null);
-
+      console.log(612, selectedContainerType)
       if (selectedContainerType === 'Layer') {
         await fetchUserLayers();
       } else if (selectedContainerType === 'Catalogue') {
@@ -138,8 +205,6 @@ function DataContainer() {
         console.log('res', res);
       } catch (error) {
         setWsResError(error instanceof Error ? error : new Error(String(error)));
-      } finally {
-        console.log('finally.....................');
       }
     } else {
       // layer or catalog
@@ -228,9 +293,29 @@ function DataContainer() {
   if (error) {
     return <div>{t("error")}{' '}{error.message}</div>;
   }
+  const layerUploadFileSetInput = (k, v) =>
+	  setFormData(prev => ({...prev, [k]: v}));
 
   if (loading) {
     return <Spinner className="size-32 " />;
+  }
+  
+  const addLayerUploadFile = async function(body) {
+  	setLoading(true);
+  	try {
+	  	await apiRequest({
+		    url: urls.layers_upload_file_new,
+		    method: 'post',
+		    isAuthRequest: true,
+		    body,
+		    isFormData: true,
+		  })
+		  setLoadFiles(false);
+	  } catch(e) {
+	  	console.log(e);
+	  }
+
+  	setLoading(false);
   }
 
   return (
@@ -313,8 +398,136 @@ function DataContainer() {
                   <div className="mt-6 rounded-xl border border-dashed border-[#c5d9f1] bg-[#f8fbff] p-6 text-center text-[#1a365d]">{t("no-saved-catalogues-yet-build-one-by-adding-layers-to-the-map-and-saving-them-as")}</div>
                 )}
             </div>
-          ) : activeTab ==="Load Files" ? (
-            <div className="text-center p-8 text-[1.2rem] text-[#666]">{t("load-files-content")}</div>
+          ) : activeTab === 'Load Files' ? (
+            <div className="text-center p-8 text-[1.2rem] text-[#666]">
+              <div
+                className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 md:gap-x-2 gap-y-10 w-full"
+              >
+		            {loadFilesLayers.map((item, index) => 
+                 <UserLayerCard
+					          key={item.layer_id + '-' + index} // Use a combination of id and index
+					          id={item.layer_id}
+					          name={item.title}
+					          description={item.description}
+					          legend={""}
+					          typeOfCard="layer"
+					          points_color={item.points_color}
+					          progress={null}
+					          onMoreInfo={function () {
+					          	(async function() {
+					          		setLoading(true);
+									      try {
+									        const res = await apiRequest({
+									          url: urls.layers_upload_file_single,
+									          method: 'post',
+									          body: { layer_id: item.layer_id, user_id: authResponse?.localId },
+									        });
+									        const data = Object.assign({}, res.data.data);
+									        data.features = data.features.filter((item) =>
+										        item.geometry.coordinates.every(number => 
+										        	number <= 90 &&
+										        	number >= -90))
+											    setGeoPoints(function (prevGeoPoints) {
+											      const updatedGeoPoints = prevGeoPoints.slice().concat(data);
+											      return updatedGeoPoints;
+											    });
+									        setResMessage(res.data.message);
+									        setResId(res.data.request_id);
+									        closeModal();
+									        console.log('res', res);
+									      } catch (error) {
+									        setWsResError(error instanceof Error ? error : new Error(String(error)));
+									      } finally {
+									        console.log('finally.....................');
+									      }
+					          		setLoading(false);
+								      })()
+					          }}
+					        />)}
+		            <UserLayerCard
+				          id={0}
+				          name={t("add-your-own-data")}
+				          description={t("import-your-own-data-file-types")}
+				          legend={""}
+				          typeOfCard="layer"
+				          points_color={"orange"}
+				          onMoreInfo={function () {
+ 					          setLoadFiles(true);
+				          }}
+			            />
+	            </div>
+	            <div className="absolute top-0 left-0 h-full">
+	            	<Modal
+					        open={loadFiles}
+					        onOpenChange={setLoadFiles}
+					        title={t("layers")}
+					        contentClassName="max-w-4xl h-full"
+		            	>
+		            	<form className="flex flex-col gap-2" onSubmit={e => {
+		            		e.preventDefault()
+		            		if(!e.target.reportValidity()) return;
+		            		addLayerUploadFile(new FormData(e.target));
+		            	}}>
+		            		<input type="hidden" name="user_id" value={authResponse?.localId} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+											required="required"
+			            		label={t("title")} name="title" value={formData["title"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+			            		label={t("file")} name="file" type="file"
+											required="required"
+			            		accept=".xlsx,.csv,.json" />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+			            		label={t("delete-after-days")} type="number" name="delete_after_days"
+											required="required"
+			            		value={formData["delete_after_days"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("color")}
+		            			type="color"
+											required="required"
+		            			name="points_color"
+		            			value={formData["points_color"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("deduplicate")}
+		            			type="checkbox"
+		            			name="deduplicate"
+		            			value={formData["deduplicate"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("deduplicate-by-how-many-meters")}
+		            			type="number"
+		            			disabled={() => formData["deduplicate"] === false}
+											required={formData["deduplicate"]}
+		            			name="deduplicate_meters"
+		            			value={formData["deduplicate_meters"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("name-of-the-'name'-column")}
+		            			type="string"
+											required="required"
+		            			name="name_column"
+		            			value={formData["name_column"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("name-of-the-latitude-column")}
+		            			type="string"
+											required="required"
+		            			name="lat_column"
+		            			value={formData["lat_column"]} />
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label={t("name-of-the-longitude-column")}
+		            			type="string"
+											required="required"
+		            			name="lon_column"
+		            			value={formData["lon_column"]} />
+		            		{/*
+		            		<LayerUploadFileInput setFormData={layerUploadFileSetInput}
+		            			label="Description"
+		            			type="textarea"
+		            			name="description"
+		            			value={formData["description"]} />
+		            		*/}
+		            		<button className="border px-4 py-2 hover:border-black">{t("Submit")}</button>
+		            	</form>
+	            	</Modal>
+	            </div>
+            </div>
           ) : (
             <div className="text-center p-8 text-[1.2rem] text-[#666]">{t("connect-your-data-content")}</div>
           )}

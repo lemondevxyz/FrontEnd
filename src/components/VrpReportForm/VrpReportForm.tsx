@@ -1,79 +1,49 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import apiRequest from '../../services/apiRequest';
 import urls from '../../urls.json';
+import Modal from '../common/Modal';
 
 import { FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa';
 import {
-  BusinessCategoryMetrics,
   CustomReportData,
   FormErrors,
-  UserProfile,
 } from '../../types/allTypesAndInterfaces';
-import { ReportSubmissionRequestBody } from '../../types/reportSubmission';
-import { CustomSegment, CustomSegmentReportResponse } from '../../types';
-import { getTotalSteps, getInitialFormData, getStepDefinitions } from './constants';
-import { useBusinessTypeConfig } from './hooks/useBusinessTypeConfig';
-import { useAdditionalCost } from './hooks/useReportPricing';
+
+import { VrpReportData  } from '../../types/vrp';
 
 // Import step components
 import BasicInformationStep from './components/BasicInformationStep';
 import SetAttributeStep from './components/AttributesStep';
-import { formatBusinessTypeForApi } from './utils/businessTypeApi';
 
-import {toLonLat} from 'ol/proj';
+import {toLonLat, fromLonLat} from 'ol/proj';
 import { OSM } from 'ol/source';
 import VectorSource from 'ol/source/Vector';
 import Control from 'ol/control/Control';
 import Draw from 'ol/interaction/Draw';
-import {Stroke, Circle, Fill, Style} from 'ol/style';
+import {Stroke, Circle, Fill, Icon, Style} from 'ol/style';
 import {defaults as defaultControls } from 'ol/control/defaults';
 import { useMap, Map, View, TileLayer, VectorLayer } from 'react-openlayers';
 import 'react-openlayers/dist/index.css';
 import { t } from '../../i18n';
+import ExcelIcon from '../../assets/images/excel.svg';
+import PdfIcon from '../../assets/images/pdf.svg';
+import Html5Icon from '../../assets/images/html5.svg';
+import RoutesMapIcon from '../../assets/images/routes_map.svg';
+import ClustersMapIcon from '../../assets/images/clusters_map.svg';
+import ShopsMapIcon from '../../assets/images/shops_map.svg';
+import MapMarkerDriver from '../../assets/images/map-marker-driver.svg';
+import MapMarkerWarehouse from '../../assets/images/map-marker-warehouse.svg';
 
 const DRAW_CONTROL_STYLE = `
 .draw-control { top: 65px; inset-inline-start: .5em; }
-.draw-control-S { top: 95px; inset-inline-start: .5em; }
-.draw-control-E { top: 125px; inset-inline-start: .5em; }
+.draw-control-D { top: 95px; inset-inline-start: .5em; }
+.draw-control-W { top: 125px; inset-inline-start: .5em; }
 .draw-control-active > button { outline: 1px solid black; }
 `;
 
 type FormInputValue = CustomReportData[keyof CustomReportData];
-
-type ApiErrorShape = {
-  response?: {
-    data?: { message?: string; detail?: string; error?: string } | string;
-  };
-  message?: string;
-};
-
-const extractErrorMessage = (error: unknown): string => {
-  let errorMessage = t("an-unexpected-error-occurred-please-try-again");
-
-  if (error && typeof error === 'object' && 'response' in error) {
-    const apiError = error as ApiErrorShape;
-    const errorData = apiError.response?.data;
-
-    if (errorData && typeof errorData === 'object') {
-      errorMessage = errorData.message || errorData.detail || errorData.error || errorMessage;
-    } else if (typeof errorData === 'string') {
-      errorMessage = errorData;
-    }
-  } else if (error instanceof Error) {
-    errorMessage = error.message.replace(/\s*\(Status:\s*\d+\)/g, '');
-  }
-
-  return errorMessage;
-};
-
-const isPaymentIntentErrorMessage = (errorMessage: string): boolean =>
-  (errorMessage.includes('PaymentIntent') || errorMessage.includes('payment method')) &&
-  (errorMessage.includes('missing a payment method') ||
-    errorMessage.includes('missing payment method') ||
-    errorMessage.includes('You cannot confirm this PaymentIntent'));
-
 
 class DrawControl extends Control {
   /**
@@ -112,31 +82,33 @@ const drawStyle = new Style({
 		radius: 5,
 	}),
 })
-const startStyle = new Style({
+const driverStyle = new Style({
 	stroke: new Stroke({color: "cyan"}),
 	fill: new Fill({color: "#FFFFFF7F"}),
-	image: new Circle({
-		stroke: new Stroke({color: "cyan"}),
-		fill: new Fill({color: "#FFFFFF7F"}),
-		radius: 5,
+	image: new Icon({
+		src: MapMarkerDriver,
 	}),
 })
-const endStyle = new Style({
+
+const warehouseStyle = new Style({
 	stroke: new Stroke({color: "magenta"}),
 	fill: new Fill({color: "#FFFFFF7F"}),
-	image: new Circle({
-		stroke: new Stroke({color: "magenta"}),
-		fill: new Fill({color: "#FFFFFF7F"}),
-		radius: 5,
+	image: new Icon({
+		src: MapMarkerWarehouse,
 	}),
-});
-
+})
 type VrpMapDrawProps = {
   source: VectorSource;
   handleInputChange: (field: string, value: FormInputValue) => void;
+  formData: object|null;
 };
 
-const VrpMapDraw = ({source, handleInputChange}: VrpMapDrawProps) => {
+const cityCoords = {
+	"Jeddah": [21.54333, 39.17278],
+	"Riyadh": [24.6333333, 46.716667],
+	"Mecca": [21.422510, 39.826168],
+}
+const VrpMapDraw = ({formData, source, handleInputChange}: VrpMapDrawProps) => {
   const map = useMap();
   const [drawers] = useState(() => [
 	  new Draw({
@@ -149,17 +121,24 @@ const VrpMapDraw = ({source, handleInputChange}: VrpMapDrawProps) => {
 		new Draw({
 	  	source: source,
 			type: "Point",
-			geometryName: "start",
-			style: startStyle,
+			geometryName: "driver",
+			style: driverStyle,
 	  }),
 		new Draw({
 	  	source: source,
 			type: "Point",
-			geometryName: "end",
-			style: endStyle,
+			geometryName: "warehouse",
+			style: warehouseStyle,
 	  }),
   ]);
+  const [oldCity, setOldCity] = useState("");
   const [draw, setDraw] = useState(0);
+	if(map && formData && oldCity != formData["city_name"]) {
+  	const city = formData["city_name"];
+		setOldCity(city);
+		// console.log(city, cityCoords[city]);
+  	map.getView().setCenter(fromLonLat([].concat(cityCoords[city]).reverse()));
+	}
   useEffect(() => {
   	drawers.map(v => {
 	  	v.addEventListener("drawend", (ev) => {
@@ -167,17 +146,31 @@ const VrpMapDraw = ({source, handleInputChange}: VrpMapDrawProps) => {
 	  		if(e.geometryName_ === "draw") {
 		  		const tmpCoords = ev.feature.getGeometry().getCoordinates()[0]
 			  		.map(v => toLonLat(v));
-		  		handleInputChange("polygon", {
-			      "type": "Feature",
-			      "properties": {},
-			      "geometry": {
-			        "coordinates": [[tmpCoords]],
-			      }
+
+			  	// console.log(tmpCoords);
+		  		handleInputChange("polygons", {
+			      "type": "FeatureCollection",
+			      "features": [{
+			      	"type": "Feature",
+			      	"properties": {},
+			      	"geometry": {
+				        "coordinates": [tmpCoords],
+				        "type": "Polygon",
+			        },
+			      }]
 		      });
-	      } else {
+	      } else if(e.geometryName_ === "driver") {
 		  		const tmpCoords = toLonLat(ev.feature.getGeometry().getCoordinates());
-		  		handleInputChange(e.geometryName_, tmpCoords);
+		  		handleInputChange("groups_info", [Object.assign(formData["groups_info"][0], {
+			  		lng: tmpCoords[1],
+			  		lat: tmpCoords[0],
+		  		})]);
+	      }  else if(e.geometryName_ === "warehouse") {
+		  		const tmpCoords = toLonLat(ev.feature.getGeometry().getCoordinates());
+		  		handleInputChange("centroid_lat", tmpCoords[0]);
+		  		handleInputChange("centroid_lng", tmpCoords[1]);
 	      }
+
 	  	})
 	  	
 		  v.addEventListener("drawstart", (ev) => {
@@ -188,9 +181,10 @@ const VrpMapDraw = ({source, handleInputChange}: VrpMapDrawProps) => {
 		  	return true
 		  });
   	});
-  }, [drawers, handleInputChange, source]);
+  }, [drawers, formData, handleInputChange, source]);
   useEffect(() => {
   	if(!map) return;
+  	
   	// [drawClass, drawPointClass].map(draw ? map.addInteraction : map.removeInteraction);
   	drawers.map(v => map.removeInteraction(v)); 
   	if(draw > 0)
@@ -199,22 +193,22 @@ const VrpMapDraw = ({source, handleInputChange}: VrpMapDrawProps) => {
   		const letter = e.target.innerText;
   		if(letter === "P")
 	  		setDraw(draw === 1 ? 0 : 1)
-	  	else if(letter === "S")
+	  	else if(letter === "D")
 	  		setDraw(draw === 2 ? 0 : 2)
-	  	else if(letter === "E")
+	  	else if(letter === "W")
 	  		setDraw(draw === 3 ? 0 : 3);
   	})
   }, [draw, drawers, map]);
   return 
 };
 
-const VrpMap = ({handleInputChange}: { handleInputChange: VrpMapDrawProps['handleInputChange'] }) => {
+const VrpMap = ({formData, handleInputChange}: { handleInputChange: VrpMapDrawProps['handleInputChange'] }) => {
   const mapRef = useRef();
   const drawSource = new VectorSource({wrapX: false});
 	return (
 		<>
 		<style>{DRAW_CONTROL_STYLE}</style>
-	  <Map ref={mapRef} controls={defaultControls().extend(["P", "S", "E"].map(v => new DrawControl({
+	  <Map ref={mapRef} controls={defaultControls().extend(["P", "D", "W"].map(v => new DrawControl({
 	  	'letter': v,
 	  })))}>
 	    <TileLayer source={new OSM()} />
@@ -224,20 +218,20 @@ const VrpMap = ({handleInputChange}: { handleInputChange: VrpMapDrawProps['handl
 	      	const name = feature.geometryName_;
 	      	if(name === "draw")
 	      		return drawStyle;
-	      	else if(name === "start")
-	      	 	return startStyle;
-	      	else if(name === "end")
-	      	 	return endStyle;
+	      	else if(name === "driver")
+	      	 	return driverStyle;
+	      	else if(name === "warehouse")
+	      	 	return warehouseStyle;
 	      }}
 	    />
-	    <VrpMapDraw source={drawSource} handleInputChange={handleInputChange} />
-	    <View center={[0, 0]} zoom={4}/>
+	    <VrpMapDraw formData={formData} source={drawSource} handleInputChange={handleInputChange} />
+	    <View center={fromLonLat([].concat(cityCoords[formData.city_name]).reverse())} zoom={13}/>
 	  </Map>
 	  </>
   )
 };
 
-const formDataKeys = ["start", "end", "polygon", "country_name", "city_name"];
+const formDataKeys = ["centroid_lat", "centroid_lng", "boolean_query", "manager_phone", "group_size", "num_groups", "polygons", "country_name", "city_name", "user_id", "groups_info", "complementary_categories"];
 const CustomReportForm = () => {
   // STEP INDEXING CONVENTION:
   // - Step 0: Report Type Selection (special case)
@@ -245,60 +239,64 @@ const CustomReportForm = () => {
   // - Use getActualStepContent(step, reportType) to map step number to content
   // - Step definitions are 0-indexed arrays representing 1-indexed steps
 
-
   const { authResponse } = useAuth();
   const navigate = useNavigate();
   // TODO: Dynamic business type from URL params - currently disabled
   // const { businessType } = useParams<{ businessType: string }>();
 
   const [categories, setCategories] = useState<string[]>([]);
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
 
-  const [formData, setFormData] = useState<CustomReportData | null>(null);
-  useEffect(() => {
-  	if(!formData) return;
-  	const obj = {};
-  	formDataKeys.map(v =>
-  		obj[v] = formData[v]);
-  	obj["excluded_categories"] = formData["complementary_categories"];
-  	obj["category"] = formData["Type"];
-  	console.log(obj);
-  }, [formData]);
+  const [formData, setFormData] = useState<VrpReportData | null>({
+    "city_name": "Riyadh",
+    "country_name": "Saudi Arabia",
+    "user_id": authResponse?.localId,
+    "polygons": {
+      "type": "FeatureCollection",
+      "features": []
+    },
+    "boolean_query": "",
+    "excluded_names": [],
+    "num_groups": 1,
+    "group_size": 400,
+    "outlier_cut_km": 0.5,
+    "centroid_lat": null,
+    "centroid_lng": null,
+    "group_size_prune_max": 0.05,
+    "max_solving_time": 30,
+    "num_work_days": 12,
+    "current_daily_km_per_van": 200,
+    "weekly_refill_sar": 300,
+    "work_hours_per_day": 10,
+    "store_visit_minutes": 20,
+    "current_stores_per_day": 20,
+    "driver_monthly_salary_sar": 3000,
+    "planner_monthly_salary_sar": 5000,
+    "work_days_per_week": 6,
+    "work_days_per_month": 24,
+    "avg_revenue_per_store_sar": 1500,
+    "revenue_period_days": 14,
+    "manager_phone": "",
+    "groups_info": [
+      {
+        "lat": null,
+        "lng": null,
+        "phone": ""
+      }
+    ]
+  });
+  // useEffect(() => console.log(formData), [formData]);
+ 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [resp, setResp] = useState({html5: "Adsf"});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [, setCompletedSteps] = useState<number[]>([]);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
-  const [businessMetrics, setBusinessMetrics] = useState<BusinessCategoryMetrics | null>(null);
+  const [submitError, ] = useState<string | null>(null);
   const businessType = formData?.Type || 'pharmacy';
 
-  // Fetch business type configuration from API
-  const {
-    config: businessConfig,
-    loading: configLoading,
-    error: configError,
-  } = useBusinessTypeConfig(businessType);
-
   // New state for report type selection
-  const [reportType] = useState<'full' | 'location' | null>(null);
-  const [hasUsedFreeLocationReport, setHasUsedFreeLocationReport] = useState<boolean>(false);
-
-  // Segment Report State
-  const [segmentReportData, setSegmentReport] = useState<CustomSegmentReportResponse | null>(null);
-  const [segmentReportLoading, setSegmentReportLoading] = useState(false);
-  const [selectedSegment, setSelectedSegment] = useState<CustomSegment | null>(null);
-  const [segmentReportError, setSegmentReportError] = useState<boolean>(false);
 
   // Payment method state
-  const [showPaymentMethodForm, setShowPaymentMethodForm] = useState(false);
-  const [, setPendingSubmission] = useState<ReportSubmissionRequestBody | null>(null);
-  const [phoneVerified] = useState(false);
-  // Track if phone verification was needed at the start (to prevent dynamic step changes)
-  const [needsPhoneVerificationInitial, setNeedsPhoneVerificationInitial] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-
-  // Ref to track previous mode/reportType to prevent race conditions
-  const prevModeRef = useRef({ isAdvancedMode, reportType });
+  const [showPaymentMethodForm, ] = useState(false);
   
   // Set user_id when component mounts
   useEffect(() => {
@@ -313,116 +311,6 @@ const CustomReportForm = () => {
       );
     }
   }, [authResponse, formData]);
-
-  // Fetch user profile to check free location report status and get phone number
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!authResponse?.localId) return;
-
-      try {
-        const response = await apiRequest({
-          url: urls.user_profile,
-          method: 'POST',
-          isAuthRequest: true,
-          body: { user_id: authResponse.localId },
-        });
-
-        const profile: UserProfile = response?.data?.data || response?.data;
-        const hasUsedFree = profile?.has_used_free_location_report || false;
-        setHasUsedFreeLocationReport(hasUsedFree);
-        const phone = profile?.phone || null;
-        
-        // Set phone verification need based on whether phone exists
-        // Check if phone is null, undefined, empty string, or just whitespace
-        const needsVerification = !phone || (phone && typeof phone === 'string' && phone.trim() === '');
-        setNeedsPhoneVerificationInitial(needsVerification);
-        setProfileLoaded(true);
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-        // Default to false if error (user can still try to claim free report)
-        setHasUsedFreeLocationReport(false);
-        // If profile fetch fails, assume phone verification is needed to be safe
-        setNeedsPhoneVerificationInitial(true);
-        setProfileLoaded(true);
-      }
-    };
-
-    fetchUserProfile();
-  }, [authResponse?.localId]);
-
-  const loadBusinessMetrics = useCallback(async (businessTypeValue: string) => {
-    try {
-      const res = await apiRequest({
-        url: `${urls.business_category_metrics}/${businessTypeValue}`,
-        method: 'get',
-      });
-      const data = res.data?.data;
-      // Only store the metrics data, don't automatically populate formData
-      // Categories should be selected by user or come from selected segment
-      setBusinessMetrics(data);
-    } catch (error) {
-      console.error('Error loading business metrics:', error);
-    }
-  }, []);
-
-  // Initialize form data when business configuration is loaded
-  useEffect(() => {
-    if (businessConfig) {
-      const initialData = getInitialFormData(businessType, businessConfig);
-
-      setFormData(initialData);
-
-      // prevent fetching same type multiple times
-      if (businessType != businessMetrics?.business_type) {
-        loadBusinessMetrics(businessType);
-      }
-    }
-  }, [businessConfig, businessType, businessMetrics?.business_type, loadBusinessMetrics]);
-
-  useEffect(() => {
-    if (selectedSegment) {
-      //  set evolution metrics, categories, and demographics
-      // Use ONLY the segment's categories, don't combine with business metrics
-      const segmentCompetition = [
-        // ...(selectedSegment.attributes.competition_categories || []), // this will be removed from api
-        ...(businessMetrics?.competition_categories || []),
-      ];
-      const segmentComplementary = [
-        ...(selectedSegment.attributes.complementary_categories || []),
-        ...(businessMetrics?.complementary_categories || []),
-      ];
-      const segmentCrossShopping = [
-        ...(selectedSegment.attributes.cross_shopping_categories || []),
-        ...(businessMetrics?.cross_shopping_categories || []),
-      ];
-
-      setFormData(prev =>
-        prev
-          ? {
-              ...prev,
-              evaluation_metrics: selectedSegment.attributes.evaluation_metrics,
-              target_age: selectedSegment.attributes.target_age,
-              target_income: selectedSegment.attributes.target_income_level,
-              competition_categories: segmentCompetition,
-              complementary_categories: segmentComplementary,
-              cross_shopping_categories: segmentCrossShopping,
-              ecosystem_string_name: selectedSegment.name,
-            }
-          : null
-      );
-
-      // setBusinessMetrics(prev =>
-      //   prev
-      //     ? {
-      //         ...prev,
-      //         competition_categories: segmentCompetition,
-      //         complementary_categories: segmentComplementary,
-      //         cross_shopping_categories: segmentCrossShopping,
-      //       }
-      //     : null
-      // );
-    }
-  }, [selectedSegment, businessMetrics]);
 
   const handleCategoryLoad = useCallback(async () => {
     try {
@@ -450,174 +338,6 @@ const CustomReportForm = () => {
   useEffect(() => {
     handleCategoryLoad();
   }, [handleCategoryLoad]);
-
-
-  // Handle advanced mode toggle - adjust steps if needed
-  useEffect(() => {
-    if (!reportType) return;
-
-    const prev = prevModeRef.current;
-    const modeChanged = prev.isAdvancedMode !== isAdvancedMode || prev.reportType !== reportType;
-
-    if (!modeChanged) return;
-
-    prevModeRef.current = { isAdvancedMode, reportType };
-
-    // Use initial phone verification need to prevent step count changes mid-flow
-    const totalSteps = getTotalSteps(reportType, isAdvancedMode, needsPhoneVerificationInitial);
-
-    // Adjust current step if it exceeds new total
-    setCurrentStep(current => {
-      if (current > totalSteps) {
-        return totalSteps;
-      }
-      return current;
-    });
-
-    // Filter completed steps to only include valid steps
-    setCompletedSteps(prev => prev.filter(step => step <= totalSteps));
-  }, [isAdvancedMode, reportType, needsPhoneVerificationInitial]);
-
-  // Redirect to phone verification step if needed when profile loads
-  useEffect(() => {
-    if (!profileLoaded || !reportType || !needsPhoneVerificationInitial || phoneVerified) return;
-    
-    // Get step definitions to find where phone verification step is
-    const stepDefinitions = getStepDefinitions(reportType, isAdvancedMode, needsPhoneVerificationInitial);
-    const phoneVerificationStepIndex = stepDefinitions.findIndex(step => step.content === 'phone-verification');
-    const reportTierStepIndex = stepDefinitions.findIndex(step => step.content === 'report-tier');
-    
-    if (phoneVerificationStepIndex === -1) return; // Phone verification step not found
-    
-    const phoneVerificationStepNumber = phoneVerificationStepIndex + 1; // Convert to 1-indexed
-    
-    // Get current step content using the updated step definitions
-    const currentStepDef = stepDefinitions[currentStep - 1];
-    const currentStepContent = currentStepDef?.content || '';
-    
-    // If user is at Report Tier step or past phone verification step but hasn't verified, redirect them
-    if (currentStepContent === 'report-tier' || 
-        (currentStep >= phoneVerificationStepNumber && currentStepContent !== 'phone-verification' && reportTierStepIndex !== -1 && currentStep > reportTierStepIndex)) {
-      // Redirect to phone verification step
-      setCurrentStep(phoneVerificationStepNumber);
-    }
-  }, [profileLoaded, needsPhoneVerificationInitial, reportType, isAdvancedMode, currentStep, phoneVerified]);
-
-  const getSegmentReport = useCallback(async () => {
-    if (!formData?.city_name) return;
-
-    setSegmentReportLoading(true);
-    setSegmentReportError(false);
-    try {
-      const res = await apiRequest({
-        url: urls.fetch_smart_segment_report,
-      });
-
-      if (res.data.data) {
-        setSegmentReport(res.data.data);
-        if (res.data.data.length > 0) {
-          setSelectedSegment(res.data.data[0]);
-        }
-      }
-    } catch (error) {
-      console.error(error);
-      setSegmentReportError(true);
-    } finally {
-      setSegmentReportLoading(false);
-    }
-  }, [formData?.city_name]);
-
-  useEffect(() => {
-    // Load segment report when user reaches the segment selection step
-    if (!reportType || !currentStep) return;
-
-    const stepDefinitions = getStepDefinitions(reportType, isAdvancedMode);
-    const stepDef = stepDefinitions[currentStep - 1];
-
-    if (
-      stepDef?.content === 'segment-selection' &&
-      !segmentReportData &&
-      !segmentReportLoading &&
-      !segmentReportError
-    ) {
-      getSegmentReport();
-    }
-  }, [
-    currentStep,
-    segmentReportData,
-    segmentReportLoading,
-    reportType,
-    isAdvancedMode,
-    segmentReportError,
-    getSegmentReport,
-  ]);
-
-  const validateForm = useCallback((): boolean => {
-    if (!formData) return false;
-
-    // Validate report type is selected
-    if (!reportType) {
-      setErrors(prev => ({ ...prev, report_type: t("please-select-a-report-type") }));
-      return false;
-    }
-
-    const newErrors: FormErrors = {};
-
-    // Validate city selection
-    if (!formData.city_name) {
-      newErrors.city_name = t("please-select-a-city");
-    }
-
-    if (!formData.Type?.trim()) {
-      newErrors.Type = t("please-select-or-enter-a-business-type");
-    }
-
-    // In advanced mode, validate report tier selection
-    if (isAdvancedMode && !formData.report_tier) {
-      newErrors.report_tier = t("please-select-a-report-tier");
-    }
-
-    // In advanced mode, validate evaluation metrics
-    // In simple mode, users use default metrics and skip this step
-    if (isAdvancedMode) {
-      // Validate evaluation metrics sum to 1.0
-      const metricsSum = Object.values(formData.evaluation_metrics).reduce(
-        (sum, value) => sum + value,
-        0
-      );
-      if (Math.abs(metricsSum - 1) > 0.001) {
-        newErrors.evaluation_metrics = t("evaluation-metrics-must-sum-to-1-0-current-sum", { sum: metricsSum.toFixed(2) });
-      }
-
-      // Validate individual metrics are not negative
-      Object.entries(formData.evaluation_metrics).forEach(([key, value]) => {
-        if (value < 0) {
-          newErrors[`metrics_${key}`] = t("metric-cannot-be-negative", { metric: key });
-        }
-      });
-
-      // Validate delivery/dine-in weights
-      const deliverySum = (formData.delivery_weight || 0) + (formData.dine_in_weight || 0);
-      if (Math.abs(deliverySum - 1) > 0.001) {
-        newErrors.delivery_weight = t("weights-must-sum-to-100");
-      }
-    }
-
-    // Current location is optional for all report types
-
-    // Custom locations are required for location reports, optional for full reports
-    if (reportType === 'location') {
-      const hasValidCustomLocation = formData.custom_locations.some(
-        loc => loc.lat !== 0 && loc.lng !== 0
-      );
-      if (!hasValidCustomLocation) {
-        newErrors.custom_locations = t("please-select-a-location-to-evaluate");
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [formData, isAdvancedMode, reportType]);
 
   // Separate validation function that doesn't update state (for use during render)
   const handleInputChange = (field: string, value: FormInputValue) => {
@@ -655,274 +375,6 @@ const CustomReportForm = () => {
     );
   };
 
-  // Determine if we're on the attributes step
-  const stepDefinitions = reportType ? getStepDefinitions(reportType, isAdvancedMode) : [];
-  const stepDef = stepDefinitions[currentStep - 1];
-  const isAttributesStep = stepDef?.content === 'attributes';
-
-  // Collect all selected datasets from categories (memoized to prevent infinite loops)
-  const allDatasets = useMemo(() => {
-    const datasets: string[] = [];
-    if (formData?.complementary_categories) {
-      datasets.push(...formData.complementary_categories);
-    }
-    if (formData?.competition_categories) {
-      datasets.push(...formData.competition_categories);
-    }
-    if (formData?.cross_shopping_categories) {
-      datasets.push(...formData.cross_shopping_categories);
-    }
-    return datasets;
-  }, [
-    formData?.complementary_categories,
-    formData?.competition_categories,
-    formData?.cross_shopping_categories,
-  ]);
-
-  const apiBusinessType = useMemo(() => {
-    if (!formData) return undefined;
-
-    return formatBusinessTypeForApi(
-      formData.potential_business_type || formData.Type || businessType,
-      categories
-    );
-  }, [formData, businessType, categories]);
-
-  // Use the new pricing hook for additional cost calculation
-  useAdditionalCost({
-    country: formData?.country_name || null,
-    city: formData?.city_name || null,
-    datasets: allDatasets,
-    reportTier:
-      reportType === 'location' ? 'single_location_premium' : formData?.report_tier || 'premium',
-    report_potential_business_type: apiBusinessType,
-    enabled: isAttributesStep && allDatasets.length > 0,
-  });
-
-  const handleSubmit = useCallback(async (reportTierOverride?: 'basic' | 'standard' | 'premium') => {
-    if (!formData || !validateForm()) {
-      return;
-    }
-
-    // Additional safety check for report type
-    if (!reportType) {
-      setSubmitError(t("please-select-a-report-type-before-submitting"));
-      return;
-    }
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-    let submissionData: ReportSubmissionRequestBody | null = null;
-
-    try {
-      // Prepare form data with default values for optional locations
-      submissionData = {
-        user_id: formData.user_id,
-        city_name: formData.city_name,
-        country_name: formData.country_name,
-        potential_business_type: apiBusinessType || businessType,
-        target_income_level: formData.target_income_level,
-        target_age: formData.target_age,
-        complementary_categories: formData.complementary_categories,
-        cross_shopping_categories: formData.cross_shopping_categories,
-        competition_categories: formData.competition_categories,
-        delivery_weight: formData.delivery_weight,
-        dine_in_weight: formData.dine_in_weight,
-        custom_locations: formData.custom_locations.map(loc => ({
-          lat: loc.lat || 0,
-          lng: loc.lng || 0,
-          properties: {
-            price: loc.properties?.price || 0,
-          },
-        })),
-        current_location: {
-          lat: formData.current_location.lat || 0,
-          lng: formData.current_location.lng || 0,
-          properties: {
-            price: formData.current_location.properties?.price || 0,
-            avg_order_value: formData.current_location.properties?.avg_order_value || 30,
-          },
-        },
-        single_location: reportType === 'location',
-        report_tier:
-          reportType === 'location'
-            ? 'single_location_premium'
-            : reportTierOverride || formData.report_tier || 'premium',
-        report_potential_business_type: apiBusinessType || businessType,
-      };
-
-      const reportUrl = urls.smart_site_report;
-
-      const res = await apiRequest({
-        url: reportUrl,
-        method: 'Post',
-        body: submissionData,
-      });
-
-      // Check if we have a report URL to redirect to
-      // API response format: res.data.data.metadata.html_file_path
-      const reportUrlResponse = res?.data?.data?.html_file_path;
-
-      // Update free report status for location reports
-      if (reportType === 'location' && !hasUsedFreeLocationReport) {
-        // The backend should have updated the flag
-        // Refresh it locally to reflect new state
-        setHasUsedFreeLocationReport(true);
-      }
-
-      // Redirect to the report URL immediately
-      if (reportUrlResponse) {
-        //window.location.href = reportUrlResponse;
-        navigate(`/${reportUrlResponse.replace(/^\/+/, '')}`);
-      } else {
-        // Fallback to home if no URL at all
-        navigate('/');
-      }
-    } catch (error: unknown) {
-      const errorMessage = extractErrorMessage(error);
-      const isPaymentIntentError = isPaymentIntentErrorMessage(errorMessage);
-
-      if (isPaymentIntentError) {
-        // Store submission data for retry after payment method is added
-        if (submissionData) {
-          setPendingSubmission(submissionData);
-        }
-        // Show payment method form instead of error
-        setShowPaymentMethodForm(true);
-        setSubmitError(null);
-      } else {
-        setSubmitError(errorMessage);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [
-    apiBusinessType,
-    businessType,
-    formData,
-    hasUsedFreeLocationReport,
-    navigate,
-    reportType,
-    validateForm,
-  ]);
-
-  // Show loading state while fetching business configuration
-  if (configLoading && !businessConfig) {
-    return (
-      <main className="min-h-screen w-full flex justify-center items-center bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
-            {/* Modern animated loading spinner */}
-            <div className="relative w-16 h-16 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-600 animate-spin"></div>
-              <div
-                className="absolute inset-2 rounded-full border-2 border-transparent border-t-blue-400 animate-spin"
-                style={{ animationDirection: 'reverse', animationDuration: '0.8s' }}
-              ></div>
-            </div>
-
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">{t("preparing-your-report")}</h2>
-            <p className="text-gray-600 mb-4">{t("setting-up-the-form-for-your")}{' '}{businessType}{' '}{t("location-analysis")}</p>
-
-            {/* Loading dots animation */}
-            <div className="flex justify-center gap-1">
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '0ms' }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '150ms' }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '300ms' }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // Show error state if configuration failed to load
-  if (configError && !businessConfig) {
-    const isNotSupportedError = configError.includes('not yet supported');
-
-    return (
-      <main className="min-h-screen w-full flex justify-center items-center bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div
-            className={`border rounded-lg p-6 ${isNotSupportedError ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}
-          >
-            <FaExclamationTriangle
-              className={`w-8 h-8 mx-auto mb-4 ${isNotSupportedError ? 'text-orange-500' : 'text-red-500'}`}
-            />
-            <h2
-              className={`text-xl font-semibold mb-2 ${isNotSupportedError ? 'text-orange-900' : 'text-red-900'}`}
-            >
-              {isNotSupportedError ?t("business-type-not-available") :t("configuration-error")}
-            </h2>
-            <p className={`mb-4 ${isNotSupportedError ? 'text-orange-700' : 'text-red-700'}`}>
-              {configError}
-            </p>
-            <button
-              onClick={() => navigate(-1)}
-              className={`px-4 py-2 text-white rounded-lg transition-colors ${
-                isNotSupportedError
-                  ? 'bg-orange-600 hover:bg-orange-700'
-                  : 'bg-red-600 hover:bg-red-700'
-              }`}
-            >{t("go-back")}</button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // Don't render form until we have both config and formData
-  if (!businessConfig || !formData) {
-    return (
-      <main className="min-h-screen w-full flex justify-center items-center bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
-            {/* Modern animated loading spinner */}
-            <div className="relative w-16 h-16 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-600 animate-spin"></div>
-              <div
-                className="absolute inset-2 rounded-full border-2 border-transparent border-t-blue-400 animate-spin"
-                style={{ animationDirection: 'reverse', animationDuration: '0.8s' }}
-              ></div>
-            </div>
-
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">{t("almost-ready")}</h2>
-            <p className="text-gray-600 mb-4">{t("finalizing-your")}{' '}{businessType}{' '}{t("report-setup")}</p>
-
-            {/* Loading dots animation */}
-            <div className="flex justify-center gap-1">
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '0ms' }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '150ms' }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: '300ms' }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // Check if we're on the last step (report-tier)
-  const isLastStep = false;
   
   return (
     <main className="fixed inset-0 w-full h-full flex flex-col bg-white overflow-hidden">
@@ -931,33 +383,33 @@ const CustomReportForm = () => {
         <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/")}
             className="flex items-center px-2 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all duration-200"
           >
             <FaArrowLeft className="w-3 h-3 me-1 rtl:rotate-180" />
             <span>{t("back")}</span>
           </button>
-          {!isLastStep && <div className="w-16"></div>} {/* Spacer for centering */}
+          <div className="w-16"></div>
         </div>
       </div>
 
       {/* Content Area - No scrolling, fits viewport */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className={`flex-1 ${isLastStep ? 'overflow-hidden' : 'overflow-y-auto'} px-4 sm:px-6 py-4 ${formData && currentStep > 0 && !isLastStep ? 'pb-24' : ''}`}>
-	          <form className="h-full flex flex-col" onSubmit={e => {
-              e.preventDefault();
-              handleSubmit();
-            }}>
+      <div className="flex-1 overflow-hidden flex flex-col pb-12">
+        <div className={`flex-1 overflow-y-auto px-4 sm:px-6 py-4 pb-24`}>
+	        <form className="h-full flex flex-col py-4 gap-2" 
+          onInvalid={async e => {
+          	e.preventDefault()
+          }}
+          onSubmit={async e => {
+	          e.preventDefault();
+	        }}>
             {/* Current Step Content */}
-            <div className={`flex-1 gap-2 py-4 flex flex-col ${isLastStep ? 'overflow-hidden' : ''}`}>
+            <div className={`flex-1 gap-2 py-4 flex flex-col`}>
               {<BasicInformationStep
 				        formData={formData}
 				        errors={errors}
 				        onInputChange={handleInputChange}
-				        isAdvancedMode={isAdvancedMode}
-				        onToggleAdvancedMode={setIsAdvancedMode}
 				        disabled={isSubmitting}
-				        categories={categories}
 				      />}
 
 		          <SetAttributeStep
@@ -967,11 +419,40 @@ const CustomReportForm = () => {
 		          />
 				      <div className="flex-1 relative w-full h-full min-h-[80vmin]" id="map-container">
 				        <div className="w-full h-full overflow-hidden [&>.ol-map]:size-full">
-				        	<VrpMap handleInputChange={handleInputChange} />
+				        	<VrpMap formData={formData} handleInputChange={handleInputChange} />
 							  </div>
 				      </div>
             </div>
-
+            <div className="flex items-center text-sm justify-center pb-4">
+	            <button className="border-green-700 px-4 py-2 rounded border hover:enabled:text-white hover:enabled:bg-green-700 disabled:cursor-not-allowed disabled:border-gray-500 disabled:text-gray-500"
+		            disabled={!formDataKeys.slice(0, -1).every(v => formData[v])}
+		            onClick={async e => {
+					          if(!e.target.parentElement.parentElement.reportValidity()) {
+					          	return
+					          }
+					          setIsSubmitting(true)
+					          try {
+						          // console.log(123, formData);
+						          const obj = Object.assign({}, formData);
+						          obj.boolean_query = obj.complementary_categories.join(" OR ")
+						          delete obj.complementary_categories
+						          const newResp = await apiRequest({
+							          url: urls.territory_design_vrp,
+							          method: "POST",
+							          body: obj,
+						          })
+						          setResp(newResp.data);
+						          if(newResp.status === 202) {
+						          	setModalOpen(true);
+						          }
+					          } catch(e) {
+					          	console.log(e);
+					          }
+					          setIsSubmitting(false)
+				       }}>
+		            {t("submit")}
+	            </button>
+	          </div>
             {/* Processing Status */}
             {isSubmitting && (
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mt-4">
@@ -1033,11 +514,50 @@ const CustomReportForm = () => {
                 </div>
               </div>
             )}
-
+            {resp && resp.html5 &&
+            (<div className="max-w-[900px] mx-auto w-full mb-4 bg-slate-100 p-8 rounded-xl">
+            	<p className="text-2xl pb-8">{t("the-files-were-generated")}</p>
+            	<div className="flex flex-col gap-4">
+            	{[{
+	            	id: "excel",
+	            	icon: ExcelIcon,
+	             }, {
+		             id: "html5",
+		             icon: Html5Icon
+		           }, {
+			           id: "pdf",
+			           icon: PdfIcon,
+		           }, {
+			           id: "routes_map",
+			           icon: RoutesMapIcon,
+			         }, {
+			           id: "shops_map",
+			           icon: ShopsMapIcon,
+		           }, {
+			           id: "clusters_map",
+			           icon: ClustersMapIcon
+		           }].map(({id, icon}) => 
+                (<p className="me-auto" key={id}>
+	                <a className="flex items-center hover:underline text-lg cursor-pointer gap-2" href={resp[id]} _target="blank">
+		                <img className="size-8" src={icon} />
+		                <span>
+		                {t(id.replace("_", "-"))}
+			              </span>
+	                </a>
+                </p>))}
+              </div>
+            </div>)}
           </form>
         </div>
       </div>
-
+      {resp &&
+    	<Modal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        contentClassName="max-w-4xl"
+      	>
+      	<span>Come back in { resp.detail && resp.detail.split(" ").slice(-2).join(" ") }, your data is being loaded.</span>
+      </Modal>}
     </main>
   );
 };

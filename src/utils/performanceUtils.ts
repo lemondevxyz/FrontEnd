@@ -25,7 +25,7 @@ type PerformanceCallback = (result: PerformanceResult) => void;
 /**
  * Type guard to check if a value is a Promise
  */
-function isPromise<T>(value: any): value is Promise<T> {
+function isPromise<T>(value: unknown): value is Promise<T> {
   return value && typeof value.then === 'function';
 }
 
@@ -35,7 +35,7 @@ function isPromise<T>(value: any): value is Promise<T> {
 function getMemoryInfo() {
   try {
     // Try browser Performance Memory API first
-    const memory = (performance as any).memory;
+    const memory = (performance as unknown).memory;
     if (memory) {
       const usedHeapSize = memory.usedJSHeapSize / (1024 * 1024); // MB
       const totalHeapSize = memory.totalJSHeapSize / (1024 * 1024); // MB
@@ -55,11 +55,11 @@ function getMemoryInfo() {
     const perfEntries = performance.getEntriesByType('resource');
     if (perfEntries.length > 0) {
       const totalTransferSize = perfEntries.reduce(
-        (total, entry) => total + (entry as any).transferSize,
+        (total, entry) => total + (entry as unknown).transferSize,
         0
       );
       const totalSize = perfEntries.reduce(
-        (total, entry) => total + ((entry as any).decodedBodySize || 0),
+        (total, entry) => total + ((entry as unknown).decodedBodySize || 0),
         0
       );
 
@@ -85,12 +85,12 @@ function getMemoryInfo() {
  * @param name Optional name for the function
  * @param callback Optional callback for performance results
  */
-export function performanceMonitor<T extends (...args: any[]) => any>(
+export function performanceMonitor<T extends (...args: unknown[]) => unknown>(
   fn: T,
   name: string = fn.name,
   callback?: PerformanceCallback
 ): T {
-  return function (this: any, ...args: Parameters<T>) {
+  return function (this: unknown, ...args: Parameters<T>) {
     const startTime = performance.now();
     const startMemory = getMemoryInfo();
     const startMark = `${name}-start-${startTime}`;
@@ -153,14 +153,14 @@ export function performanceMonitor<T extends (...args: any[]) => any>(
  * @param name Optional name for the function
  * @param callback Optional callback for performance results
  */
-export function usePerformanceMonitor<T extends (...args: any[]) => any>(
+export function usePerformanceMonitor<T extends (...args: unknown[]) => unknown>(
   fn: T,
   name: string = fn.name,
   callback?: PerformanceCallback
 ) {
   return useCallback(
-    performanceMonitor(fn, name, callback),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => performanceMonitor(fn, name, callback),
+    // eslint-disable-next-line react-hooks/exhaustive-deps    
     [name]
   );
 }

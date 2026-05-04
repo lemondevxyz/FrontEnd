@@ -1,23 +1,12 @@
-import { KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FaGlobe,
   FaMapMarkerAlt,
   FaBuilding,
   FaExclamationTriangle,
-  FaSearch,
-  FaPlus,
+  FaMotorcycle,
 } from 'react-icons/fa';
 import { CITY_OPTIONS } from '../constants';
 import { t } from '../../../i18n';
-
-
-const formatCategoryName = (category: string): string =>
-  category
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-
-const normalizeValue = (value: string): string => value.trim().replace(/\s+/g, ' ');
 
 interface BasicInformationStepProps {
   formData: {
@@ -29,119 +18,67 @@ interface BasicInformationStepProps {
     city_name?: string;
     Type?: string;
   };
-  onInputChange: (field: 'city_name' | 'Type', value: string) => void;
-  isAdvancedMode: boolean;
-  onToggleAdvancedMode: (enabled: boolean) => void;
+  onInputChange: (field: string, value: string) => void;
   disabled?: boolean;
-  categories: string[];
 }
 
-const BasicInformationStep = ({
+const MotorcycleInputNumber = ({
   formData,
   errors,
   onInputChange,
-  isAdvancedMode,
-  onToggleAdvancedMode,
   disabled = false,
-  categories,
-}: BasicInformationStepProps) => {
-  const [categorySearchTerm, setCategorySearchTerm] = useState(formData.Type);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  objKey,
+  text,
+}) => {
+	const key = objKey;
+	return (
+    <div className="space-y-3 flex-1">
+      <label htmlFor="Type" className="block text-sm font-semibold text-gray-700">
+        <span className="flex items-center gap-2">
+          <FaMotorcycle className="w-4 h-4 mr-2 text-primary" />
+          {text}
+          &nbsp;
+          <div className="text-red-500">*</div>
+        </span>
+      </label>
 
-  const findExactCategoryMatch = useCallback(
-    (value: string): string | undefined => {
-      const normalizedValue = normalizeValue(value).toLowerCase();
-      if (!normalizedValue) return undefined;
+      <div className="space-y-3">
+        <div className="relative">
+          <input
+            type="number"
+            id="num_groups"
+            placeholder={text}
+            value={formData[key]}
+            pattern="[0-9]*"
+            required
+            onInput={e => {
+              if(e.target.checkValidity() || e.target.value === "") {
+              
+	              onInputChange(key, e.target.value === "" ? "" : Number(e.target.value))
+	            } else
+	              e.target.value = formData[key]
+            }}
+            className={`w-full pl-2 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 ${
+              disabled
+                ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
+                : errors.Type
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300 bg-white'
+            }`}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      return categories.find(category => {
-        const normalizedCategory = category.toLowerCase();
-        const normalizedFormattedCategory = formatCategoryName(category).toLowerCase();
-        return (
-          normalizedCategory === normalizedValue || normalizedFormattedCategory === normalizedValue
-        );
-      });
-    },
-    [categories]
-  );
-
-  const getDisplayValue = useCallback(
-    (value: string): string => {
-      const exactMatch = findExactCategoryMatch(value);
-      return exactMatch ? formatCategoryName(exactMatch) : value;
-    },
-    [findExactCategoryMatch]
-  );
-
-  const validateCustomValue = (value: string): { valid: boolean; error?: string } => {
-    if (value.length < 2) {
-      return { valid: false, error: t("business-type-must-be-at-least-2-characters") };
-    }
-
-    if (value.length > 50) {
-      return { valid: false, error: t("business-type-must-be-at-most-50-characters") };
-    }
-
-    return { valid: true };
-  };
-
-  const filteredCategories = useMemo(() => {
-    const normalizedSearch = normalizeValue(categorySearchTerm).toLowerCase();
-
-    if (!normalizedSearch) {
-      return categories;
-    }
-
-    return categories.filter(category => {
-      const formattedCategory = formatCategoryName(category).toLowerCase();
-      return category.toLowerCase().includes(normalizedSearch) || formattedCategory.includes(normalizedSearch);
-    });
-  }, [categories, categorySearchTerm]);
-
-  const exactCategoryMatch = findExactCategoryMatch(categorySearchTerm);
-  const normalizedSearchTerm = normalizeValue(categorySearchTerm);
-  const showAddAction = !!normalizedSearchTerm && !exactCategoryMatch;
-  const showNoResultsMessage =
-    normalizedSearchTerm.length > 0 && filteredCategories.length === 0 && !showAddAction;
-  const displayCategoryValue = useMemo(
-    () => getDisplayValue(formData.Type),
-    [formData.Type, getDisplayValue]
-  );
-
-  useEffect(() => {
-    if (!isCategoryDropdownOpen) {
-      setCategorySearchTerm(displayCategoryValue);
-    }
-  }, [displayCategoryValue, isCategoryDropdownOpen]);
-
-  const applyCategoryValue = (value: string) => {
-    const normalizedValue = normalizeValue(value);
-
-    if (!normalizedValue) {
-      setCategoryError(t("please-enter-a-business-type"));
-      return;
-    }
-
-    const validation = validateCustomValue(normalizedValue);
-    if (!validation.valid) {
-      setCategoryError(validation.error || t("invalid-business-type"));
-      return;
-    }
-
-    const matchedCategory = findExactCategoryMatch(normalizedValue);
-
-    onInputChange('Type', matchedCategory || normalizedValue);
-    setCategorySearchTerm(matchedCategory ? formatCategoryName(matchedCategory) : normalizedValue);
-    setIsCategoryDropdownOpen(false);
-    setCategoryError(null);
-  };
-
-  const handleCategorySearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return;
-
-    event.preventDefault();
-    applyCategoryValue(categorySearchTerm);
-  };
+const BasicInformationStep = (obj: BasicInformationStepProps) => {
+	const {
+	  formData,
+	  errors,
+	  onInputChange,
+	  disabled = false,
+	} = obj
 
   return (
     <div className="space-y-3 animate-fade-in-up">
@@ -154,8 +91,10 @@ const BasicInformationStep = ({
         {/* Country (readonly) */}
         <div className="space-y-3">
           <label htmlFor="country_name" className="block text-sm font-semibold text-gray-700">
-            <span className="flex items-center">
-              <FaGlobe className="w-4 h-4 me-2 text-primary" />{t("country")}</span>
+            <span className="flex items-center gap-2">
+              <FaGlobe className="w-4 h-4 mr-2 text-primary" />
+              {t("country")}
+            </span>
           </label>
           <input
             type="text"
@@ -169,8 +108,10 @@ const BasicInformationStep = ({
         {/* City Selection */}
         <div className="space-y-3">
           <label htmlFor="city_name" className="block text-sm font-semibold text-gray-700">
-            <span className="flex items-center">
-              <FaMapMarkerAlt className="w-4 h-4 me-2 text-primary" />{t("city")}<span className="text-red-500 ms-1">*</span>
+            <span className="flex items-center gap-2">
+              <FaMapMarkerAlt className="w-4 h-4 mr-2 text-primary" />
+              {t("city")}
+              <span className="text-red-500 ml-1">*</span>
             </span>
           </label>
           <select
@@ -194,169 +135,72 @@ const BasicInformationStep = ({
           </select>
           {errors.city_name && (
             <p className="mt-2 text-sm text-red-600 flex items-center">
-              <FaExclamationTriangle className="w-4 h-4 me-1" />
+              <FaExclamationTriangle className="w-4 h-4 mr-1" />
               {errors.city_name}
             </p>
           )}
         </div>
       </div>
-
-      {/* Type Selection */}
-      <div className="space-y-3">
-        <label htmlFor="Type" className="block text-sm font-semibold text-gray-700">
-          <span className="flex items-center">
-            <FaBuilding className="w-4 h-4 me-2 text-primary" />{t("what-kind-of-business-is-yours")}</span>
-        </label>
-
-        <div className="space-y-3">
-          <div className="relative">
-            <FaSearch className="absolute start-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              id="Type"
-              placeholder={t("search-categories-or-enter-a-custom-business-type")}
-              value={categorySearchTerm}
-              onChange={e => {
-                setCategorySearchTerm(e.target.value);
-                setIsCategoryDropdownOpen(true);
-                if (categoryError) {
-                  setCategoryError(null);
-                }
-              }}
-              onFocus={() => setIsCategoryDropdownOpen(true)}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsCategoryDropdownOpen(false);
-                  setCategorySearchTerm(displayCategoryValue);
-                }, 150);
-              }}
-              onKeyDown={handleCategorySearchKeyDown}
-              disabled={disabled}
-              className={`w-full ps-10 pe-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 ${
-                disabled
-                  ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
-                  : errors.Type
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-300 bg-white'
-              }`}
-            />
-          </div>
-
-          {categoryError && (
-            <p className="text-sm text-red-600 flex items-center">
-              <FaExclamationTriangle className="w-4 h-4 me-1" />
-              {categoryError}
-            </p>
-          )}
-
-          {isCategoryDropdownOpen && normalizedSearchTerm && (
-            <div className="space-y-3">
-              {showAddAction && (
-                <button
-                  type="button"
-                  onMouseDown={event => event.preventDefault()}
-                  onClick={() => applyCategoryValue(normalizedSearchTerm)}
-                  disabled={disabled}
-                  className="w-full flex items-center justify-center px-4 py-3 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FaPlus className="w-3.5 h-3.5 me-2" />{t("add-2")}{normalizedSearchTerm}"
-                </button>
-              )}
-
-              {(filteredCategories.length > 0 || showNoResultsMessage) && (
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl bg-white">
-                  {filteredCategories.length > 0 ? (
-                    filteredCategories.map(category => (
-                      <button
-                        key={category}
-                        type="button"
-                        onMouseDown={event => event.preventDefault()}
-                        onClick={() => applyCategoryValue(category)}
-                        disabled={disabled}
-                        className={`w-full text-start px-4 py-3 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition-colors duration-150 ${
-                          formData.Type.toLowerCase() === category.toLowerCase()
-                            ? 'bg-primary/10 border-s-4 border-primary text-primary font-medium'
-                            : 'text-gray-700'
-                        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {formatCategoryName(category)}
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-4 py-3 text-gray-500 text-center">{t("no-categories-found-matching")}{normalizedSearchTerm}"
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {errors.Type && !categoryError && (
-          <p className="mt-2 text-sm text-red-600 flex items-center">
-            <FaExclamationTriangle className="w-4 h-4 me-1" />
-            {errors.Type}
-          </p>
-        )}
+      <div className="flex flex-col lg:flex-row gap-2">	      
+	      <MotorcycleInputNumber {...Object.assign({
+		      text: t("how-many-groups"),
+		      objKey: "num_groups",
+		    },obj)} />
+	      <MotorcycleInputNumber {...Object.assign({
+		      text: t("how-big-are-the-groups"),
+		      objKey: "group_size",
+		    },obj)} />
       </div>
+      
+      {/* Type Selection */}
+      <div className="flex flex-col lg:flex-row gap-2">
 
-      {/* Advanced Configuration Toggle */}
-      <div className="border-t border-gray-200 pt-4 mt-6 hidden">
-        <div className="p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-gray-900 mb-1">{t("advanced-configuration")}</h4>
-              <p id="advanced-config-description" className="text-xs text-gray-600">{t("customize-evaluation-metrics-add-specific-locations-and-set-your-current-positio")}</p>
-            </div>
-            <label className="flex items-center cursor-pointer">
-              <span className="sr-only">{t("enable-advanced-configuration")}</span>
-              <button
-                type="button"
-                onClick={() => onToggleAdvancedMode(!isAdvancedMode)}
-                disabled={disabled}
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                  disabled
-                    ? 'bg-gray-200 cursor-not-allowed opacity-60'
-                    : isAdvancedMode
-                      ? 'bg-primary'
-                      : 'bg-gray-300'
-                }`}
-                aria-label={isAdvancedMode ? t("disable-advanced-configuration") : t("enable-advanced-configuration")}
-                aria-pressed={isAdvancedMode}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm ${
-                    isAdvancedMode ? 'translate-x-6 rtl:-translate-x-6' : 'translate-x-1 rtl:-translate-x-1'
-                  }`}
-                />
-              </button>
-            </label>
-          </div>
-
-          {/* Clear action button */}
-          <button
-            type="button"
-            onClick={() => onToggleAdvancedMode(!isAdvancedMode)}
-            className={`w-full py-2 px-4 rounded-lg font-medium text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              isAdvancedMode
-                ? 'bg-primary text-white hover:bg-primary/90 focus:ring-primary/20'
-                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-primary hover:text-primary focus:ring-primary/20'
-            }`}
-            aria-label={
-              isAdvancedMode ? t("advanced-configuration-is-enabled") : t("enable-advanced-configuration")
-            }
-            aria-describedby="advanced-config-description"
-          >
-            {isAdvancedMode ?t("advanced-mode-enabled") :t("enable-advanced-configuration")}
-          </button>
-        </div>
-
-        {isAdvancedMode && (
-          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-700">
-              <strong>{t("advanced-mode-enabled-2")}</strong>{' '}{t("you-ll-be-able-to-customize-evaluation-metrics-add-custom-locations-and-set-your")}</p>
-          </div>
-        )}
+	      <div className="flex-1">
+		      <div className="space-y-3 flex-1">
+		        <label htmlFor="Type" className="block text-sm font-semibold text-gray-700">
+		          <span className="flex items-center gap-2">
+		            <FaBuilding className="w-4 h-4 mr-2 text-primary" />
+		            {t("manager-phone-number")}
+		            &nbsp;
+			          <div className="text-red-500">*</div>
+		          </span>
+		        </label>
+		      	<input type="text" 
+		      		required
+		      		value={formData["manager_phone"]}
+              className={`w-full pl-2 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 ${
+              disabled
+                ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
+                : errors.Type
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300 bg-white'
+            }`} placeholder={t("966-5x-xxx-xxxx")} onChange={e => onInputChange("manager_phone", e.target.value)} />
+	      	</div>
+	      </div>
+	      <div className="flex-1">
+		      <div className="space-y-3 flex-1">
+		        <label htmlFor="Type" className="block text-sm font-semibold text-gray-700">
+		          <span className="flex items-center gap-2">
+		            <FaMotorcycle className="w-4 h-4 mr-2 text-primary" />
+		            {t("driver-phone-number")}
+		            &nbsp;
+			          <div className="text-red-500">*</div>
+		          </span>
+		        </label>
+		      	<input type="text" 
+		      		required
+		      		value={formData["groups_info"][0]["phone"]}
+              className={`w-full pl-2 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 ${
+              disabled
+                ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
+                : errors.Type
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300 bg-white'
+            }`} placeholder={t("966-5x-xxx-xxxx")} onChange={e => onInputChange("groups_info", [Object.assign(formData["groups_info"][0], {
+	            "phone": e.target.value
+            })])} />
+	      	</div>
+	      </div>
       </div>
     </div>
   );

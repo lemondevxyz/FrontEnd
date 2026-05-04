@@ -241,6 +241,7 @@ export function CatalogProvider(props: { children: ReactNode }) {
   const [currentStyle, setCurrentStyle] = useState('mapbox://styles/mapbox/streets-v11');
   const [sections, setSections] = useState<Section[] | PolygonData[]>([]);
   const [isDraftSaving, setIsDraftSaving] = useState(false);
+  const [selectedContainerLayerModalOpen, setSelectedContainerLayerModalOpen] = useState(false);
 
   
   useEffect(() => {
@@ -1465,6 +1466,8 @@ export function CatalogProvider(props: { children: ReactNode }) {
         setIsDraftSaving,
         clearDraft,
         fetchGeoPoints,
+				selectedContainerLayerModalOpen,
+				setSelectedContainerLayerModalOpen,
       }}
     >
       {children}
