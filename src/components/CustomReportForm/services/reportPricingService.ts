@@ -57,8 +57,8 @@ export interface IntelligenceItem {
   is_currently_owned: boolean;
   free_as_part_of_package: boolean | null;
   intelligence_name: string;
-  description: string;
-  data_variables: Record<string, string>;
+  description?: string;
+  data_variables?: Record<string, string>;
 }
 
 export interface PriceData {
@@ -175,7 +175,7 @@ class ReportPricingService {
       });
 
       return response.data.data as PriceData;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading price data:', error);
       throw error;
     }

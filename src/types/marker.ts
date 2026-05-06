@@ -4,7 +4,7 @@ export interface MeasurementData {
   description: string;
   sourcePoint: [number, number];
   destinationPoint: [number, number];
-  route: any;
+  route: unknown;
   distance: number;
   duration: number;
   timestamp: number;

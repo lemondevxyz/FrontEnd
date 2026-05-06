@@ -25,6 +25,7 @@ interface UseDatasetPricesReturn {
   priceData: PriceData | null;
   isCalculatingPrices: boolean;
   getPrice: (type: string) => string;
+  getRawPrice: (type: string) => number;
   formatPrice: (value: number) => string;
 }
 
@@ -163,10 +164,19 @@ export const useDatasetPrices = ({
     [isCalculatingPrices, priceData, formatPrice]
   );
 
+  const getRawPrice: (type: string) => number = useCallback(
+    (type: string) => {
+      const priceItem = priceData?.dataset_purchase_items?.find(d => d.dataset_name === type);
+      return priceItem?.cost ?? 0;
+    },
+    [priceData]
+  );
+
   return {
     priceData,
     isCalculatingPrices,
     getPrice,
+    getRawPrice,
     formatPrice,
   };
 };

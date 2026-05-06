@@ -12,6 +12,7 @@ export type Report = {
   options: {
     free_redirect: string;
     custom_redirect: string;
+    open_page?: string;
   };
   coming_soon: boolean;
 };

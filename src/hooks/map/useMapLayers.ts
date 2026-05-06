@@ -50,10 +50,10 @@ const debouncedStreetViewCheck = _.debounce(
 
 const getGridPaint = (pointsColor: string) => ({
   'fill-color': pointsColor || defaultMapConfig.defaultColor,
-  'fill-opacity': ['/', ['get', 'backend_opacity'], 100],
+  'fill-opacity': ['coalesce', ['/', ['get', 'backend_opacity'], 100], 0],
   'fill-outline-color': [
     'case',
-    ['==', ['get', 'backend_opacity'], 0],
+    ['==', ['coalesce', ['get', 'backend_opacity'], 0], 0],
     'rgba(0,0,0,0)',
     'rgba(0,0,0,128)',
   ],
@@ -297,7 +297,7 @@ export function useMapLayers() {
                   generateId: true,
                 });
 
-                if (featureCollection.is_fake) {
+                if (featureCollection.is_backend_grid) {
                   console.time('Polygon processing');
 
                   try {
@@ -349,7 +349,7 @@ export function useMapLayers() {
                       paint: {
                         'fill-color':
                           featureCollection.points_color || defaultMapConfig.defaultColor,
-                        'fill-opacity': ['/', ['get', 'backend_opacity'], 100],
+                        'fill-opacity': ['coalesce', ['/', ['get', 'backend_opacity'], 100], 0],
                         'fill-outline-color': '#000',
                       },
                     });

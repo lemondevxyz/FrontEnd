@@ -1,0 +1,73 @@
+{
+    "datasets": {
+        "real_estate": {
+            "description_key": "dataset-real-estate-overview",
+            "data_variables_description_keys": {
+                "location": "location_desc",
+                "url": "url_desc",
+                "price": "price_desc",
+                "category": "category_desc"
+            }
+        },
+        "google_categories": {
+            "description_key": "dataset-google-categories-overview",
+            "data_variables_description_keys": {
+                "location": "location_desc",
+                "types": "types_desc",
+                "primaryType": "primaryType_desc",
+                "popularity_score": "popularity_score_desc",
+                "popularity_score_category": "popularity_score_category_desc"
+            }
+        }
+    },
+    "intelligence": {
+        "population": {
+            "description_key": "intelligence-population-overview",
+            "data_variables_description_keys": {
+                "Main_ID": "Main_ID_desc",
+                "Grid_ID": "Grid_ID_desc",
+                "Level": "Level_desc",
+                "Population_Count": "Population_Count_desc",
+                "Male_Population": "Male_Population_desc",
+                "Female_Population": "Female_Population_desc",
+                "Population_Density_KM2": "Population_Density_KM2_desc",
+                "Median_Age_Total": "Median_Age_Total_desc",
+                "Median_Age_Male": "Median_Age_Male_desc",
+                "Median_Age_Female": "Median_Age_Female_desc",
+                "Household_Average_Size": "Household_Average_Size_desc",
+                "Household_Median_Size": "Household_Median_Size_desc",
+                "Household_Density": "Household_Density_desc",
+                "Area": "Area_desc"
+            }
+        },
+        "income": {
+            "description_key": "intelligence-income-overview",
+            "data_variables_description_keys": {
+                "Main_ID": "Main_ID_desc",
+                "Grid_ID": "Grid_ID_desc",
+                "Level": "Level_desc",
+                "Population_Count": "Population_Count_desc",
+                "Male_Population": "Male_Population_desc",
+                "Female_Population": "Female_Population_desc",
+                "Population_Density_KM2": "Population_Density_KM2_desc",
+                "Median_Age_Total": "Median_Age_Total_desc",
+                "Median_Age_Male": "Median_Age_Male_desc",
+                "Median_Age_Female": "Median_Age_Female_desc",
+                "Income": "Income_desc",
+                "Low_Income_Score": "Low_Income_Score_desc",
+                "Medium_Income_Score": "Medium_Income_Score_desc",
+                "High_Income_Score": "High_Income_Score_desc",
+                "Area": "Area_desc"
+            }
+        },
+        "real_estate": {
+            "description_key": "intelligence-real-estate-overview",
+            "data_variables_description_keys": {
+                "Main_ID": "Main_ID_desc",
+                "Grid_ID": "Grid_ID_desc",
+                "Level": "Level_desc",
+                "rent_price": "rent_price_desc"
+            }
+        }
+    }
+}

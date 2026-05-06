@@ -71,7 +71,7 @@ class BusinessMetricsService {
       } else {
         throw new Error(apiResponse.message || `Business type '${businessType}' is not supported`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if it's a 404 error (business type not supported yet)
       if (error?.response?.status === 404 || error?.response?.status === 400) {
         throw new Error(

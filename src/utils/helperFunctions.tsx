@@ -2,6 +2,9 @@ import { t } from '../i18n';
 
 export function formatSubcategoryName(name: string | undefined | null): string {
   if (!name) return '';
+  const translated = t(name);
+  if (translated !== name) return translated;
+
   return name
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))

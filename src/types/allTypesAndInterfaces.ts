@@ -135,7 +135,6 @@ export interface CatalogContextType {
   name: string;
   caseStudyContent?: Descendant[];
   selectedContainerType: 'Catalogue' | 'Layer' | 'Home';
-  selectedContainerLayerModalOpen: boolean;
   selectedHomeTab: 'LAYER' | 'CATALOG';
   setSelectedHomeTab: React.Dispatch<React.SetStateAction<'LAYER' | 'CATALOG'>>;
   setFormStage: React.Dispatch<React.SetStateAction<'catalog' | 'catalogDetails' | 'save'>>;
@@ -168,8 +167,8 @@ export interface CatalogContextType {
   setSaveResponse: React.Dispatch<React.SetStateAction<SaveResponse | null>>;
   colors: string[][];
   setColors: React.Dispatch<React.SetStateAction<string[][]>>;
-  chosenPallet: unknown;
-  setChosenPallet: React.Dispatch<React.SetStateAction<unknown>>;
+  chosenPallet: number | null;
+  setChosenPallet: React.Dispatch<React.SetStateAction<number | null>>;
   radiusInput: number | null;
   setRadiusInput: React.Dispatch<React.SetStateAction<number | null>>;
   openDropdownIndices: (number | null)[];
@@ -184,14 +183,14 @@ export interface CatalogContextType {
   ) => Promise<GradientColorBasedOnZone[]>;
   selectedBasedon: string;
   setSelectedBasedon: React.Dispatch<React.SetStateAction<string>>;
-  layerColors: Record<string, unknown>;
-  setLayerColors: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  layerColors: Record<string, string>;
+  setLayerColors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   isRadiusMode: boolean;
   setIsRadiusMode: React.Dispatch<React.SetStateAction<boolean>>;
   isAdvanced: boolean;
   setIsAdvanced: React.Dispatch<React.SetStateAction<boolean>>;
-  isAdvancedMode: Record<string, unknown>;
-  setIsAdvancedMode: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  isAdvancedMode: Record<string, boolean>;
+  setIsAdvancedMode: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   updateLayerColor: (layerId: number, newColor: string) => void;
   updateLayerDisplay: (layerIndex: number, display: boolean) => void;
   updateLayerHeatmap: (layerIndex: number, isHeatmap: boolean) => void;
@@ -204,7 +203,7 @@ export interface CatalogContextType {
   basedOnProperty: string | null;
   setBasedOnProperty: React.Dispatch<React.SetStateAction<string | null>>;
   updateLayerLegend: (layerId: number, legend: string) => void;
-  handleStoreUnsavedGeoPoint: (geoPoints: unknown) => void;
+  handleStoreUnsavedGeoPoint: (geoPoints: MapFeatures[]) => void;
   handleNameBasedColorZone: (
     requestData?: ReqGradientColorBasedOnZone
   ) => Promise<GradientColorBasedOnZone[]>;
@@ -466,6 +465,9 @@ export interface ReqFetchDataset {
     includedTypes: string[];
     excludedTypes: string[];
     layer_name?: string;
+    layer_legend?: string;
+    layer_description?: string;
+    action?: LayerAction;
   }[];
   includedTypes: string[];
   excludedTypes: string[];
@@ -629,6 +631,8 @@ export interface CityData {
   borders: CityBorders;
 }
 
+export type LayerAction = 'sample' | 'full data';
+
 export interface Layer {
   id: number;
   name: string;
@@ -644,6 +648,7 @@ export interface Layer {
   layer_description?: string;
   layer_id?: string;
   cost: number;
+  action?: LayerAction;
 }
 
 export interface LayerGroup {
@@ -696,9 +701,9 @@ export const DisplayType = {
 export interface PolygonFeature {
   id: string;
   type: string;
-  properties: unknown;
+  properties: Record<string, unknown> | null;
   geometry: {
-    coordinates: [number, number][][] | number[][][] | unknown;
+    coordinates: number[][][] | number[][][][];
     type: string;
   };
   isStatisticsPopupOpen: boolean;
@@ -787,9 +792,9 @@ export interface CategoriesBrowserSubCategoriesProps {
     includedCount: number[];
     excludedCount: number[];
   };
-  onRemoveType: (type: string, layerId: number, isExcluded: boolean) => void;
-  onAddToIncluded: (type: string) => void;
-  onAddToExcluded?: (type: string) => void;
+  layers?: { id: number; name: string }[];
+  onToggleTypeInLayer?: (type: string, layerId: number) => void;
+  onCreateLayerWithType?: (type: string) => void;
   getPrice?: (type: string) => string | React.ReactNode;
   onTypeClick?: (type: string) => void;
   hideAddRemoveButtons?: boolean;
@@ -869,8 +874,17 @@ export interface LayerDisplaySubCategoriesProps {
   layer: Layer;
   layerIndex: number;
   onRemoveType: (type: string) => void;
-  onToggleTypeInLayer: (type: string) => void;
   onNameChange: (layerIndex: number, newName: string) => void;
+  onColorChange: (layerIndex: number, color: string) => void;
+  onLegendChange: (layerIndex: number, legend: string) => void;
+  onDescriptionChange: (layerIndex: number, description: string) => void;
+  onActionChange: (layerIndex: number, action: LayerAction) => void;
+  onRefresh: (layerId: number) => void;
+  isFetching: boolean;
+  saveStatus?: 'saved' | 'unsaved' | 'saving' | 'error';
+  listPrice: number;
+  formatPrice: (value: number) => string;
+  isPriceVisible: boolean;
 }
 
 export type MapContextType = {

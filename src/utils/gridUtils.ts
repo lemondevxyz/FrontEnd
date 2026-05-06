@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 /**
  * Generates HTML content for grid popup
  */
@@ -17,11 +19,14 @@ export function generateGridPopupContent(properties: Record<string, number>): st
     .filter(([key]) => !['density', 'center', 'pointCount'].includes(key)) // Exclude internal properties
     .forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        // Format the label
-        const label = key
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+        const translatedLabel = t(key);
+        const label =
+          translatedLabel !== key
+            ? translatedLabel
+            : key
+                .split('_')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
 
         // Format the value
         const displayValue =

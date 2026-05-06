@@ -21,8 +21,8 @@ const applyDocumentLanguage = (language?: string) => {
 const savedLang = typeof localStorage !== 'undefined' ? localStorage.getItem(LANG_STORAGE_KEY) : null;
 
 void i18next.init({
-  lng: savedLang === 'ar' ? 'ar' : 'en',
-  fallbackLng: 'en',
+  lng: savedLang === 'en' ? 'en' : 'ar',
+  fallbackLng: 'ar',
   resources: {
     ar: {
       translation: ar,

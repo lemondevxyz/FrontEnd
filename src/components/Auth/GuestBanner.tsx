@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { isGuestUser, useAuth } from '../../context/AuthContext';
 import { t } from '../../i18n';
+import { useLanguage } from '../../hooks/useLanguage';
 
 
 const GUEST_TOAST_ID = 'guest-banner';
@@ -26,6 +27,7 @@ export default function GuestBanner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authResponse, sourceLocal } = useAuth();
+  const { lang } = useLanguage();
   const isGuest = isGuestUser(authResponse);
 
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -103,7 +105,7 @@ export default function GuestBanner() {
         },
       }
     );
-  }, [authResponse, isGuest, isHomePage, navigate, sourceLocal]);
+  }, [authResponse, isGuest, isHomePage, navigate, sourceLocal, lang]);
 
   useEffect(() => {
     return () => {

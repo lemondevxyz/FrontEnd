@@ -72,7 +72,9 @@ export default function CampaignHomePage() {
 
   const handleReportClick = (report: Report) => {
     setSelectedReport(report);
-    if (isTrySomethingElseReport(report)) {
+    if(report.options.open_page) {
+	    navigate(report.options.open_page);
+    } else if (isTrySomethingElseReport(report)) {
       closeModal();
     } else {
       setStep(1);

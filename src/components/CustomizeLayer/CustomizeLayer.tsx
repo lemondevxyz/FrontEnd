@@ -75,10 +75,10 @@ function CustomizeLayer() {
 
         return {
           layerId: layer.id,
-          name: legendText,
-          legend: legendText,
-          description: '',
-          color: getDefaultLayerColor(layer.id),
+          name: layer.name || legendText,
+          legend: layer.layer_legend || legendText,
+          description: layer.layer_description || '',
+          color: layer.points_color || getDefaultLayerColor(layer.id),
         };
       });
 

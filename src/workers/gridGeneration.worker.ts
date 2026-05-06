@@ -2,28 +2,34 @@ import pMap from 'p-map';
 import * as turf from '@turf/turf';
 import _ from 'lodash';
 import { PropertyStats } from '../types/allTypesAndInterfaces';
+import type { Feature, FeatureCollection, Geometry, Polygon, MultiPolygon } from 'geojson';
 
-// Build a spatial index for the featureCollection to narrow point-in-polygon checks
-const buildSpatialIndex = (featureCollection: any) => {
+type GridFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
+type PointFeature = Feature<Geometry, Record<string, unknown>>;
+type GridFeatureCollection = FeatureCollection<Geometry, Record<string, unknown>> & {
+  basedon?: string;
+};
+
+const buildSpatialIndex = (featureCollection: GridFeatureCollection) => {
   const tree = turf.geojsonRbush();
   tree.load(featureCollection);
   return tree;
 };
 
-self.onmessage = async event => {
+self.onmessage = async (event: MessageEvent<{ grid: FeatureCollection; featureCollection: GridFeatureCollection }>) => {
   const { grid, featureCollection } = event.data;
   const concurrency = navigator.hardwareConcurrency || 4;
   const spatialIndex = buildSpatialIndex(featureCollection);
 
   const processedFeatures = await pMap(
-    grid.features,
-    async (cell: any, index: number) => {
-      const pointsWithin = spatialIndex.search(cell);
+    grid.features as GridFeature[],
+    async (cell: GridFeature, index: number) => {
+      const pointsWithin = spatialIndex.search(cell) as FeatureCollection<Geometry, Record<string, unknown>>;
 
       const density =
-        featureCollection.basedon?.length > 0
-          ? pointsWithin.features.reduce((sum: number, point: any) => {
-              const value = point.properties[featureCollection.basedon];
+        featureCollection.basedon && featureCollection.basedon.length > 0
+          ? pointsWithin.features.reduce((sum: number, point: PointFeature) => {
+              const value = point.properties?.[featureCollection.basedon!];
               return sum + (typeof value === 'number' ? value : 0);
             }, 0)
           : pointsWithin.features.length;
@@ -45,17 +51,13 @@ self.onmessage = async event => {
       };
 
       const cellProperties: Record<string, PropertyStats> = pointsWithin.features.reduce(
-        (acc, point) => {
-          Object.entries(point.properties).forEach(([key, value]) => {
+        (acc, point: PointFeature) => {
+          Object.entries(point.properties ?? {}).forEach(([key, value]) => {
             if (value == null) return;
             const numValue = Number(value);
             if (isNaN(numValue)) return;
             if (!acc[key]) {
-              acc[key] = {
-                sum: 0,
-                values: [],
-                count: 0,
-              };
+              acc[key] = { sum: 0, values: [], count: 0 };
             }
             acc[key].sum += numValue;
             acc[key].values.push(numValue);
@@ -66,7 +68,7 @@ self.onmessage = async event => {
         {} as Record<string, PropertyStats>
       );
 
-      Object.entries(cellProperties).forEach(([key, stats]) => {
+      Object.entries(cellProperties).forEach(([, stats]) => {
         stats.average = stats.sum / stats.count;
         if (stats.values.length > 0) {
           const sorted = [...stats.values].sort((a, b) => a - b);
@@ -78,7 +80,10 @@ self.onmessage = async event => {
 
       const cellStats = Object.entries(cellProperties).reduce(
         (acc, [key, stats]) => {
-          acc[key] = _.round(stats.sum || 0, 2);
+          acc[key] =
+            key === 'backend_opacity'
+              ? _.round(stats.average ?? 0, 2)
+              : _.round(stats.sum || 0, 2);
           return acc;
         },
         {} as Record<string, number>
@@ -88,7 +93,7 @@ self.onmessage = async event => {
         ...cell,
         id: index,
         properties: {
-          ...cell.properties,
+          ...(cell.properties ?? {}),
           ...cellStats,
           density,
           center: center_obj,
@@ -99,5 +104,5 @@ self.onmessage = async event => {
     { concurrency }
   );
 
-  (self as any).postMessage({ features: processedFeatures });
+  postMessage({ features: processedFeatures });
 };

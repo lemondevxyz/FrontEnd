@@ -12,6 +12,7 @@ import CategoriesBrowserSubCategories from '../../../../components/CategoriesBro
 import { Skeleton } from '../../../../components/common/Skeleton';
 import { toast } from 'sonner';
 import { t } from '../../../../i18n';
+import metaDataInformation from '../../../../data/metaDataInformation.json';
 
 
 interface DataVariable {
@@ -66,6 +67,7 @@ interface PriceData {
     is_currently_owned: boolean;
     free_as_part_of_package: boolean | null;
     dataset_name: string;
+    data_type?: string;
     api_calls?: number;
     description?: string;
     data_variables?: Record<string, string>;
@@ -135,9 +137,8 @@ interface ReportTierData {
   datasetLimit?: number;
   additionalDatasetCost?: number;
   tag?: string;
-  /** From report_packages API – used for View Details when not in cart */
+  /** Translated description – populated from frontend translation system */
   description?: string;
-  data_variables?: Record<string, string>;
 }
 
 const itemConfig = {
@@ -246,80 +247,72 @@ function CheckoutBilling({ Name }: { Name: string }) {
         packages = [];
       }
       
-      // Parse "Intelligences Included:" section from API description (✓/✗) as source of truth
-      const parseIntelligencesFromDescription = (description?: string): ReportTierData['intelligences'] => {
-        const fallback = {
-          ai: false,
-          income: false,
-          population: false,
-          realEstate: false,
-          competition: false,
-          poi: false,
-        };
-        if (!description) return fallback;
-        const normalized = description.replace(/<br\s*\/?>/gi, '\n');
-        const check = (label: string): boolean => {
-          const included = new RegExp(`✓\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|\\(|<)`).test(normalized);
-          const excluded = new RegExp(`✗\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|\\(|<)`).test(normalized);
-          return included && !excluded;
-        };
+      // Derive intelligences from included_intelligences array (API no longer sends description)
+      const parseIntelligencesFromArray = (
+        included: string[],
+        reportTier: string
+      ): ReportTierData['intelligences'] => {
+        const arr = (included || []).map(s => s.toLowerCase());
+        const isPremium = reportTier === 'premium' || reportTier === 'single_location_premium';
         return {
-          ai: check('AI'),
-          income: check('Income'),
-          population: check('Population'),
-          realEstate: check('Real Estate'),
-          competition: check('Competition'),
-          poi: check('POI'),
+          ai: isPremium,
+          income: arr.includes('income'),
+          population: arr.includes('population'),
+          realEstate: true,
+          competition: true,
+          poi: true,
         };
+      };
+
+      // Derive perks from tier key (no longer parsed from description)
+      const getTierPerks = (reportTier: string, hasConcierge: boolean, pkg: ReportPackage): string[] => {
+        if (pkg.perks && pkg.perks.length > 0) return pkg.perks;
+        const perks: string[] = [];
+        if (reportTier === 'basic') {
+          perks.push('Preset Scoring', '1x Report', 'Full Data Access');
+        } else {
+          perks.push('Custom Scoring', 'Full Data Access');
+        }
+        if (pkg.included_report_refreshes) {
+          perks.push(`${pkg.included_report_refreshes}x Report Refreshes`);
+        }
+        if (hasConcierge) perks.push('Personal Concierge Service');
+        return perks;
       };
 
       // Transform API data to match our component structure
       const transformedTiers: ReportTierData[] = packages.map((pkg) => {
-        // Parse perks from description if not provided directly
-        const extractPerks = (description?: string): string[] => {
-          if (pkg.perks && pkg.perks.length > 0) return pkg.perks;
-          if (!description) return [];
-          
-          const perks: string[] = [];
-          // Extract features from description
-          if (description.includes('Custom Scoring')) perks.push('Custom Scoring');
-          if (description.includes('Preset Scoring')) perks.push('Preset Scoring');
-          if (pkg.included_report_refreshes) {
-            perks.push(`${pkg.included_report_refreshes}x Report Refreshes`);
-          }
-          if (description.includes('1x Report')) perks.push('1x Report');
-          if (description.includes('Full Data Access')) perks.push('Full Data Access');
-          if (description.includes('Concierge')) perks.push('Personal Concierge Service');
-          return perks;
-        };
-        
-        const hasConcierge = pkg.description?.toLowerCase().includes('concierge');
-        const intelligencesFromApi = parseIntelligencesFromDescription(pkg.description);
+        const hasConcierge = pkg.report_tier === 'premium' || pkg.report_tier === 'single_location_premium';
         const intelligences = pkg.intelligences
           ? {
-              ai: pkg.intelligences.ai ?? intelligencesFromApi.ai,
-              income: pkg.intelligences.income ?? intelligencesFromApi.income,
-              population: pkg.intelligences.population ?? intelligencesFromApi.population,
-              realEstate: pkg.intelligences.realEstate ?? intelligencesFromApi.realEstate,
-              competition: pkg.intelligences.competition ?? intelligencesFromApi.competition,
-              poi: pkg.intelligences.poi ?? intelligencesFromApi.poi,
+              ai: pkg.intelligences.ai ?? false,
+              income: pkg.intelligences.income ?? false,
+              population: pkg.intelligences.population ?? false,
+              realEstate: pkg.intelligences.realEstate ?? true,
+              competition: pkg.intelligences.competition ?? true,
+              poi: pkg.intelligences.poi ?? true,
             }
-          : intelligencesFromApi;
-        
+          : parseIntelligencesFromArray(pkg.included_intelligences || [], pkg.report_tier);
+
+        // Name and description come from frontend translation system
+        const tierName = t(`report-package-${pkg.report_tier}`);
+        const tierDescription = t(`report-package-${pkg.report_tier}-description`, {
+          included_datasets_count: pkg.included_datasets_count ?? 0,
+        });
+
         return {
           id: `report-${pkg.report_tier}-tier`,
-          name: pkg.name || `${pkg.report_tier.charAt(0).toUpperCase() + pkg.report_tier.slice(1)} Tier`,
+          name: tierName || pkg.name || `${pkg.report_tier.charAt(0).toUpperCase() + pkg.report_tier.slice(1)} Tier`,
           price: pkg.price_usd || pkg.price || 0,
           reportKey: pkg.report_tier as ReportTier,
-          perks: extractPerks(pkg.description),
+          perks: getTierPerks(pkg.report_tier, hasConcierge, pkg),
           intelligences,
           isMostPopular: pkg.is_most_popular ?? (pkg.report_tier === 'premium'),
           conciergeService: pkg.concierge_service || (hasConcierge ? 'Personal consultant to guide your business expansion' : undefined),
           datasetLimit: pkg.dataset_limit || pkg.included_datasets_count,
           additionalDatasetCost: pkg.additional_dataset_cost ?? 300,
           tag: pkg.tag,
-          description: pkg.description,
-          data_variables: pkg.data_variables,
+          description: tierDescription,
         };
       });
 
@@ -861,7 +854,7 @@ function CheckoutBilling({ Name }: { Name: string }) {
     }
   }, [authResponse?.localId, checkout]);
 
-  // Helper function to convert data_variables object to array
+  // Helper function to convert data_variables object to array (values may be plain text or t() keys)
   const convertDataVariables = useCallback(
     (dataVars: Record<string, string> | undefined): DataVariable[] => {
       if (!dataVars) return [];
@@ -869,6 +862,43 @@ function CheckoutBilling({ Name }: { Name: string }) {
         key,
         description,
       }));
+    },
+    []
+  );
+
+  // Look up description and data variables from the local metaDataInformation.json
+  const getLocalMetadata = useCallback(
+    (
+      type: 'dataset' | 'intelligence' | 'report',
+      key: string,
+      item?: PurchaseItem
+    ): { description: string; dataVariables: DataVariable[] } => {
+      if (type === 'intelligence') {
+        const intelKey = key.replace(/ /g, '_').toLowerCase() as keyof typeof metaDataInformation.intelligence;
+        const meta = metaDataInformation.intelligence[intelKey];
+        if (meta) {
+          return {
+            description: t(meta.description_key),
+            dataVariables: Object.entries(meta.data_variables_description_keys).map(([k, tk]) => ({
+              key: k,
+              description: t(tk),
+            })),
+          };
+        }
+      } else if (type === 'dataset') {
+        const dataType = (item as (PurchaseItem & { data_type?: string }) | undefined)?.data_type as keyof typeof metaDataInformation.datasets | undefined;
+        if (dataType && metaDataInformation.datasets[dataType]) {
+          const meta = metaDataInformation.datasets[dataType];
+          return {
+            description: t(meta.description_key),
+            dataVariables: Object.entries(meta.data_variables_description_keys).map(([k, tk]) => ({
+              key: k,
+              description: t(tk),
+            })),
+          };
+        }
+      }
+      return { description: '', dataVariables: [] };
     },
     []
   );
@@ -899,12 +929,12 @@ function CheckoutBilling({ Name }: { Name: string }) {
         name,
         type: 'report' as const,
         description: tier.description || 'No description available.',
-        dataVariables: convertDataVariables(tier.data_variables),
+        dataVariables: [],
         price: tier.price,
         itemKey: key,
       };
     },
-    [reportTiers, convertDataVariables]
+    [reportTiers]
   );
 
   // Update selectedItem when price data changes (uses priceData for display)
@@ -926,11 +956,26 @@ function CheckoutBilling({ Name }: { Name: string }) {
       const item = items?.find((i: PurchaseItem) => i[config.matchKey] === key) as PurchaseItem | undefined;
 
       if (item) {
+        // For intelligence/dataset items, description and data_variables are no longer sent
+        // by the backend – look them up from the frontend's local metaDataInformation.json
+        const localMeta = type !== 'report' ? getLocalMetadata(type, key, item) : null;
+        const resolvedDescription =
+          item.description ||
+          (type === 'report'
+            ? t(`report-package-${key}-description`)
+            : localMeta?.description || '');
+        const resolvedDataVariables =
+          item.data_variables
+            ? convertDataVariables(item.data_variables)
+            : type === 'report'
+            ? []
+            : localMeta?.dataVariables || [];
+
         setSelectedItem({
           name,
           type,
-          description: item.description || '',
-          dataVariables: convertDataVariables(item.data_variables),
+          description: resolvedDescription,
+          dataVariables: resolvedDataVariables,
           price: item.cost,
           itemKey: key,
           isCurrentlyOwned: item.is_currently_owned,
@@ -958,6 +1003,7 @@ function CheckoutBilling({ Name }: { Name: string }) {
     convertDataVariables,
     createEmptySelectedItem,
     getReportSelectedItemFromTier,
+    getLocalMetadata,
   ]);
 
   // Handler to select item for viewing details (NOT for adding to cart)

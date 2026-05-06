@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HiArrowRight, HiX, HiArrowUp } from 'react-icons/hi';
 import { useAuth } from '../../context/AuthContext';
@@ -13,6 +13,7 @@ import { t } from '../../i18n';
 interface ChatProps {
   position?: string;
   topic?: topics;
+  anchorRef?: React.RefObject<HTMLElement>;
 }
 
 const defaultProps = {
@@ -50,6 +51,33 @@ function Chat(props: ChatProps = defaultProps) {
 
   const [isSampleLoading, setIsSampleLoading] = useState(false);
   const [isFullDataLoading, setIsFullDataLoading] = useState(false);
+  const [anchorStyle, setAnchorStyle] = useState<React.CSSProperties>({});
+  const [dir, setDir] = useState(() => document.documentElement.dir || 'ltr');
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setDir(document.documentElement.dir || 'ltr');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!props.anchorRef?.current || window.innerWidth < 1024) {
+      setAnchorStyle({});
+      return;
+    }
+    if (!isOpen) {
+      const id = setTimeout(() => setAnchorStyle({}), 500);
+      return () => clearTimeout(id);
+    }
+    const rect = props.anchorRef.current.getBoundingClientRect();
+    if (dir === 'rtl') {
+      setAnchorStyle({ position: 'fixed', top: rect.top, right: window.innerWidth - rect.left + 8 });
+    } else {
+      setAnchorStyle({ position: 'fixed', top: rect.top, left: rect.right + 8 });
+    }
+  }, [isOpen, props.anchorRef, dir]);
 
   useEffect(() => {
     if (props.topic) setTopic(props.topic);
@@ -325,12 +353,15 @@ function Chat(props: ChatProps = defaultProps) {
     );
   };
 
+  const hasAnchorStyle = Object.keys(anchorStyle).length > 0;
+
   const chatContent = (
     <div
-      className={`${props.position}
+      className={`${hasAnchorStyle ? 'z-50' : props.position}
         lg:w-[400px] w-[95vw] max-h-[70vh] bg-white rounded-2xl shadow-xl
         transform-gpu transition-all duration-500 ease-out z-20
         ${isOpen ? '-translate-x-0 scale-100 opacity-100' : '-translate-x-1/4 scale-95 opacity-0 pointer-events-none'}`}
+      style={hasAnchorStyle ? anchorStyle : undefined}
     >
       {/* Chat header */}
       <div className="flex items-center justify-between bg-gem-gradient-animated bg-200% animate-gradient-shift p-4 rounded-t-2xl">
